@@ -18,7 +18,7 @@ defmodule ReqLLM.Providers.GoogleVertex do
       export GOOGLE_CLOUD_PROJECT="your-project-id"
       export GOOGLE_CLOUD_REGION="us-central1"
 
-      # Option 2: Pass directly in options
+      # Option 2: File path in options
       ReqLLM.generate_text(
         "google-vertex:claude-haiku-4-5@20251001",
         "Hello",
@@ -26,6 +26,26 @@ defmodule ReqLLM.Providers.GoogleVertex do
           service_account_json: "/path/to/service-account.json",
           project_id: "your-project-id",
           region: "us-central1"
+        ]
+      )
+
+      # Option 3: JSON string directly (no file needed)
+      ReqLLM.generate_text(
+        "google-vertex:claude-haiku-4-5@20251001",
+        "Hello",
+        provider_options: [
+          service_account_json: ~s({"client_email": "...", "private_key": "..."}),
+          project_id: "your-project-id"
+        ]
+      )
+
+      # Option 4: Pre-parsed map
+      ReqLLM.generate_text(
+        "google-vertex:claude-haiku-4-5@20251001",
+        "Hello",
+        provider_options: [
+          service_account_json: %{"client_email" => "...", "private_key" => "..."},
+          project_id: "your-project-id"
         ]
       )
 
@@ -78,9 +98,10 @@ defmodule ReqLLM.Providers.GoogleVertex do
 
   @provider_schema [
     service_account_json: [
-      type: :string,
+      type: {:or, [:string, :map]},
       doc:
-        "Path to service account JSON file (can also use GOOGLE_APPLICATION_CREDENTIALS env var)"
+        "Service account credentials: file path, JSON string, or pre-parsed map " <>
+          "(can also use GOOGLE_APPLICATION_CREDENTIALS env var for file path)"
     ],
     access_token: [
       type: :string,

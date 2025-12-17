@@ -114,6 +114,36 @@ defmodule ReqLLM.Provider.Utils do
 
   def ensure_parsed_body(body), do: body
 
+  @doc """
+  Converts atom keys in a map to string keys.
+
+  Useful for normalizing maps that may have atom or string keys to ensure
+  consistent access patterns. Only converts top-level keys.
+
+  ## Parameters
+
+  - `map` - Map with atom and/or string keys
+
+  ## Returns
+
+  Map with all keys as strings.
+
+  ## Examples
+
+      iex> ReqLLM.Provider.Utils.stringify_keys(%{foo: "bar", "baz" => "qux"})
+      %{"foo" => "bar", "baz" => "qux"}
+
+      iex> ReqLLM.Provider.Utils.stringify_keys(%{"already" => "strings"})
+      %{"already" => "strings"}
+  """
+  @spec stringify_keys(map()) :: map()
+  def stringify_keys(map) when is_map(map) do
+    Map.new(map, fn
+      {k, v} when is_atom(k) -> {Atom.to_string(k), v}
+      {k, v} -> {k, v}
+    end)
+  end
+ 
   @sensitive_query_params ~w(key api_key apikey access_token token)
 
   @doc """
