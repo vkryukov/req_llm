@@ -26,7 +26,7 @@ Image generation returns a canonical `ReqLLM.Response` struct where the assistan
 ```elixir
 # Get the first image part
 image_part = ReqLLM.Response.image(response)
-# => %ReqLLM.Message.ContentPart{type: :image, data: <<...>>, media_type: "image/png"}
+# => #ContentPart<:image image/png (3469636 bytes)>
 
 # Get all images (when n > 1)
 all_images = ReqLLM.Response.images(response)
@@ -94,7 +94,7 @@ OpenAI's image generation accepts only a **single text prompt** - it does not su
 
 ```elixir
 # Good: Descriptive prompt
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "openai:gpt-image-1",
   "A cozy coffee shop interior with warm lighting, exposed brick walls,
    vintage furniture, and steam rising from ceramic cups on wooden tables"
@@ -124,7 +124,7 @@ OpenAI's image generation accepts only a **single text prompt** - it does not su
 
 ```elixir
 # gpt-image-1 with transparency
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "openai:gpt-image-1",
   "A golden retriever puppy, isolated on transparent background",
   output_format: :png,
@@ -132,7 +132,7 @@ OpenAI's image generation accepts only a **single text prompt** - it does not su
 )
 
 # dall-e-3 with style
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "openai:dall-e-3",
   "A mountain landscape at sunset",
   size: "1792x1024",
@@ -160,7 +160,7 @@ OpenAI's image generation accepts only a **single text prompt** - it does not su
 DALL-E 3 may automatically enhance your prompt for better results. The revised prompt is available in the response metadata:
 
 ```elixir
-{:ok, response} = ReqLLM.Images.generate_image("openai:dall-e-3", "A cat")
+{:ok, response} = ReqLLM.generate_image("openai:dall-e-3", "A cat")
 
 [image_part] = ReqLLM.Response.images(response)
 revised = image_part.metadata[:revised_prompt]
@@ -248,7 +248,7 @@ context = Context.new([
 ])
 
 # Generate the edited image
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "google:gemini-2.5-flash-image",
   context,  # Pass the full context instead of a string
   aspect_ratio: "16:9"
@@ -267,7 +267,7 @@ alias ReqLLM.{Context, Message, Response}
 alias ReqLLM.Message.ContentPart
 
 # Initial generation
-{:ok, response1} = ReqLLM.Images.generate_image(
+{:ok, response1} = ReqLLM.generate_image(
   "google:gemini-2.5-flash-image",
   "A medieval castle on a hilltop"
 )
@@ -285,7 +285,7 @@ context = Context.new([
   }
 ])
 
-{:ok, response2} = ReqLLM.Images.generate_image(
+{:ok, response2} = ReqLLM.generate_image(
   "google:gemini-2.5-flash-image",
   context
 )
@@ -303,7 +303,7 @@ context2 = Context.new([
   }
 ])
 
-{:ok, final_response} = ReqLLM.Images.generate_image(
+{:ok, final_response} = ReqLLM.generate_image(
   "google:gemini-2.5-flash-image",
   context2
 )
@@ -326,7 +326,7 @@ context = Context.new([
   }
 ])
 
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "google:gemini-2.5-flash-image",
   context
 )
@@ -350,7 +350,7 @@ Google recommends describing scenes rather than listing keywords:
 ## Error Handling
 
 ```elixir
-case ReqLLM.Images.generate_image("openai:gpt-image-1", prompt) do
+case ReqLLM.generate_image("openai:gpt-image-1", prompt) do
   {:ok, response} ->
     image_data = ReqLLM.Response.image_data(response)
     File.write!("output.png", image_data)
@@ -371,7 +371,7 @@ end
 Use fixtures to test image generation without making API calls:
 
 ```elixir
-{:ok, response} = ReqLLM.Images.generate_image(
+{:ok, response} = ReqLLM.generate_image(
   "openai:gpt-image-1",
   "A test prompt",
   fixture: "image_basic"

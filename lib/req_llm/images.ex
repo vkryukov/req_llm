@@ -75,6 +75,11 @@ defmodule ReqLLM.Images do
                    type: :pos_integer,
                    doc: "Timeout for receiving HTTP responses in milliseconds"
                  ],
+                 max_retries: [
+                   type: :pos_integer,
+                   default: 3,
+                   doc: "Maximum number of retry attempts for transient network errors"
+                 ],
                  on_unsupported: [
                    type: {:in, [:warn, :error, :ignore]},
                    default: :warn,
