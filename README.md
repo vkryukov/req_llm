@@ -35,6 +35,10 @@ schema = [name: [type: :string, required: true], age: [type: :pos_integer]]
 person = ReqLLM.generate_object!(model, "Generate a person", schema)
 #=> %{name: "John Doe", age: 30}
 
+{:ok, image_response} = ReqLLM.generate_image("openai:gpt-image-1", "A simple red square")
+image_bytes = ReqLLM.Response.image_data(image_response)
+File.write!("red_square.png", image_bytes)
+
 {:ok, response} = ReqLLM.generate_text(
   model,
   ReqLLM.Context.new([
