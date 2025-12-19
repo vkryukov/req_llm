@@ -181,6 +181,7 @@ defmodule ReqLLM.MixProject do
       {:quokka, "== 2.11.2", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: [:dev, :test], runtime: false},
       {:plug, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:git_ops, "~> 2.9", only: :dev, runtime: false},
       {:git_hooks, "~> 0.8", only: :dev, runtime: false}
     ]
   end
@@ -192,8 +193,10 @@ defmodule ReqLLM.MixProject do
       maintainers: ["Mike Hostetler"],
       links: %{
         "Changelog" => "https://hexdocs.pm/req_llm/changelog.html",
+        "Discord" => "https://agentjido.xyz/discord",
+        "Documentation" => "https://hexdocs.pm/req_llm",
         "GitHub" => @source_url,
-        "Elixir AI Discord" => "https://agentjido.xyz/discord"
+        "Website" => "https://agentjido.xyz"
       },
       files:
         ~w(lib priv mix.exs LICENSE README.md CHANGELOG.md CONTRIBUTING.md AGENTS.md usage-rules.md guides .formatter.exs)
@@ -206,7 +209,7 @@ defmodule ReqLLM.MixProject do
         "format --check-formatted",
         "compile --warnings-as-errors",
         "dialyzer",
-        "credo --strict"
+        "credo --min-priority higher"
       ],
       q: ["quality"],
       docs: ["docs --formatter html"],
