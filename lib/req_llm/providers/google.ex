@@ -723,6 +723,7 @@ defmodule ReqLLM.Providers.Google do
     generation_config =
       %{"responseModalities" => ["IMAGE"]}
       |> maybe_put_google_aspect_ratio(request.options[:aspect_ratio])
+      |> maybe_put("candidateCount", request.options[:n] || 1)
 
     %{}
     |> maybe_put(:systemInstruction, system_instruction)
@@ -1137,11 +1138,11 @@ defmodule ReqLLM.Providers.Google do
     ReqLLM.Context.merge_response(base_response.context, base_response)
   end
 
-  defp extract_candidate_parts(%{"candidates" => [candidate | _]}) when is_map(candidate) do
-    case get_in(candidate, ["content", "parts"]) do
-      parts when is_list(parts) -> parts
+  defp extract_candidate_parts(%{"candidates" => candidates}) when is_list(candidates) do
+    Enum.flat_map(candidates, fn
+      %{"content" => %{"parts" => parts}} when is_list(parts) -> parts
       _ -> []
-    end
+    end)
   end
 
   defp extract_candidate_parts(_), do: []

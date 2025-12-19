@@ -17,6 +17,7 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
       |> Req.Request.register_options([
         :operation,
         :model,
+        :n,
         :aspect_ratio,
         :output_format,
         :context
@@ -24,6 +25,7 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
       |> Req.Request.merge_options(
         operation: :image,
         model: "gemini-2.0-flash-exp-image-generation",
+        n: 2,
         aspect_ratio: "1:1",
         output_format: :png,
         context: context
@@ -35,6 +37,7 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
     assert get_in(body, ["generationConfig", "responseModalities"]) == ["IMAGE"]
     assert get_in(body, ["generationConfig", "imageConfig", "aspectRatio"]) == "1:1"
     assert get_in(body, ["generationConfig", "imageConfig", "mimeType"]) == nil
+    assert get_in(body, ["generationConfig", "candidateCount"]) == 2
 
     assert get_in(body, ["contents", Access.at(0), "parts", Access.at(0), "text"]) ==
              "A cat in space"
@@ -66,6 +69,18 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
                 }
               ]
             }
+          },
+          %{
+            "content" => %{
+              "parts" => [
+                %{
+                  "inlineData" => %{
+                    "mimeType" => "image/png",
+                    "data" => Base.encode64("abc")
+                  }
+                }
+              ]
+            }
           }
         ],
         "usageMetadata" => %{
@@ -80,6 +95,7 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
 
     assert %Response{} = updated.body
     assert Response.image_data(updated.body) == "xyz"
+    assert Enum.map(Response.images(updated.body), & &1.data) == ["xyz", "abc"]
     assert Response.usage(updated.body)[:total_tokens] == 2
   end
 end
