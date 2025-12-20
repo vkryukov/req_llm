@@ -406,6 +406,7 @@ defmodule ReqLLM.Providers.Google do
 
   def prepare_request(:image, model_spec, prompt, opts) do
     with {:ok, model} <- ReqLLM.model(model_spec),
+         :ok <- validate_image_n(model, opts),
          {:ok, context} <- image_context(prompt, opts),
          opts_with_context = Keyword.put(opts, :context, context),
          {:ok, processed_opts0} <-
@@ -413,6 +414,9 @@ defmodule ReqLLM.Providers.Google do
          :ok <- validate_version_feature_compat(processed_opts0) do
       processed_opts =
         Keyword.put(processed_opts0, :base_url, effective_base_url(processed_opts0))
+
+      processed_opts =
+        Keyword.put(processed_opts, :image_n_provided, Keyword.has_key?(opts, :n))
 
       http_opts = Keyword.get(processed_opts, :req_http_options, [])
 
@@ -440,7 +444,8 @@ defmodule ReqLLM.Providers.Google do
             :negative_prompt,
             :user,
             :provider_options,
-            :base_url
+            :base_url,
+            :image_n_provided
           ]
 
       request =
@@ -478,6 +483,24 @@ defmodule ReqLLM.Providers.Google do
       _ -> ReqLLM.Context.normalize(prompt, opts)
     end
   end
+
+  defp validate_image_n(%LLMDB.Model{} = model, opts) do
+    if Keyword.has_key?(opts, :n) and image_n_forbidden?(model) do
+      {:error,
+       ReqLLM.Error.Invalid.Parameter.exception(
+         parameter:
+           "n is not supported for gemini-2.5-flash-image or gemini-3-pro-image-preview; specify the image count in the prompt"
+       )}
+    else
+      :ok
+    end
+  end
+
+  defp image_n_forbidden?(%LLMDB.Model{provider: :google, id: id}) do
+    id in ["gemini-2.5-flash-image", "gemini-3-pro-image-preview"]
+  end
+
+  defp image_n_forbidden?(_), do: false
 
   @impl ReqLLM.Provider
   def attach(%Req.Request{} = request, model_input, user_opts) do
@@ -720,16 +743,55 @@ defmodule ReqLLM.Providers.Google do
           split_messages_for_gemini(request.options[:messages] || [])
       end
 
+    contents = maybe_strip_image_role(contents)
+
     generation_config =
-      %{"responseModalities" => ["IMAGE"]}
+      %{}
       |> maybe_put_google_aspect_ratio(request.options[:aspect_ratio])
-      |> maybe_put("candidateCount", request.options[:n] || 1)
+      |> maybe_put("candidateCount", image_candidate_count(request.options))
+
+    generation_config = if generation_config == %{}, do: nil, else: generation_config
 
     %{}
     |> maybe_put(:systemInstruction, system_instruction)
     |> Map.put(:contents, contents)
     |> maybe_put(:generationConfig, generation_config)
   end
+
+  defp image_candidate_count(opts) when is_list(opts) do
+    if Keyword.get(opts, :image_n_provided, false) do
+      case Keyword.fetch(opts, :n) do
+        {:ok, value} -> value
+        :error -> nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp image_candidate_count(opts) when is_map(opts) do
+    if Map.get(opts, :image_n_provided, false) and Map.has_key?(opts, :n) do
+      Map.get(opts, :n)
+    else
+      nil
+    end
+  end
+
+  defp image_candidate_count(_), do: nil
+
+  defp maybe_strip_image_role([%{role: "user"} = content]) do
+    [Map.delete(content, :role)]
+  end
+
+  defp maybe_strip_image_role([%{role: :user} = content]) do
+    [Map.delete(content, :role)]
+  end
+
+  defp maybe_strip_image_role([%{"role" => "user"} = content]) do
+    [Map.delete(content, "role")]
+  end
+
+  defp maybe_strip_image_role(contents), do: contents
 
   defp maybe_put_google_aspect_ratio(config, nil), do: config
 

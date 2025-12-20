@@ -42,7 +42,7 @@ These options are supported across providers (where the model allows):
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `n` | integer | Number of images to generate (default: 1) |
+| `n` | integer | Number of images to generate (provider-dependent; gemini-2.5-flash-image and gemini-3-pro-image-preview reject `n`) |
 | `size` | string or tuple | Image dimensions, e.g., `"1024x1024"` or `{1024, 1024}` |
 | `aspect_ratio` | string | Aspect ratio, e.g., `"16:9"` or `"1:1"` |
 | `output_format` | atom | Image format: `:png`, `:jpeg`, or `:webp` |
@@ -205,6 +205,8 @@ Google's Gemini models support both text-to-image generation and image editing t
 - When you don't need multi-turn editing capabilities
 
 ### Basic Generation
+
+Note: `gemini-2.5-flash-image` and `gemini-3-pro-image-preview` reject `n`; specify the image count in the prompt.
 
 ```elixir
 {:ok, response} = ReqLLM.generate_image(

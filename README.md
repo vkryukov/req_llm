@@ -39,6 +39,8 @@ person = ReqLLM.generate_object!(model, "Generate a person", schema)
 image_bytes = ReqLLM.Response.image_data(image_response)
 File.write!("red_square.png", image_bytes)
 
+Note: Google image models gemini-2.5-flash-image and gemini-3-pro-image-preview reject :n; specify the image count in the prompt.
+
 {:ok, response} = ReqLLM.generate_text(
   model,
   ReqLLM.Context.new([

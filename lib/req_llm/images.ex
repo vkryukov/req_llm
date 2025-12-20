@@ -20,8 +20,7 @@ defmodule ReqLLM.Images do
   @base_schema NimbleOptions.new!(
                  n: [
                    type: :pos_integer,
-                   default: 1,
-                   doc: "Number of images to generate (provider/model dependent)"
+                   doc: "Number of images to generate (provider/model dependent; gemini-2.5-flash-image and gemini-3-pro-image-preview reject :n and require prompting)"
                  ],
                  size: [
                    type: {:or, [:string, {:tuple, [:pos_integer, :pos_integer]}]},

@@ -20,7 +20,8 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
         :n,
         :aspect_ratio,
         :output_format,
-        :context
+        :context,
+        :image_n_provided
       ])
       |> Req.Request.merge_options(
         operation: :image,
@@ -28,19 +29,60 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
         n: 2,
         aspect_ratio: "1:1",
         output_format: :png,
-        context: context
+        context: context,
+        image_n_provided: true
       )
 
     encoded = Google.encode_body(request)
     body = Jason.decode!(encoded.body)
 
-    assert get_in(body, ["generationConfig", "responseModalities"]) == ["IMAGE"]
+    assert get_in(body, ["generationConfig", "responseModalities"]) == nil
     assert get_in(body, ["generationConfig", "imageConfig", "aspectRatio"]) == "1:1"
     assert get_in(body, ["generationConfig", "imageConfig", "mimeType"]) == nil
     assert get_in(body, ["generationConfig", "candidateCount"]) == 2
 
     assert get_in(body, ["contents", Access.at(0), "parts", Access.at(0), "text"]) ==
              "A cat in space"
+
+    assert get_in(body, ["contents", Access.at(0), "role"]) == nil
+  end
+
+  test "prepare_request/3 rejects n for gemini image models" do
+    {:ok, model} = ReqLLM.model("google:gemini-2.5-flash-image")
+
+    assert {:error, _} =
+             Google.prepare_request(
+               :image,
+               model,
+               "A prompt",
+               n: 2
+             )
+  end
+
+  test "encode_body/1 omits generationConfig when no image options are set" do
+    context = %Context{
+      messages: [
+        %ReqLLM.Message{role: :user, content: "A cat in space"}
+      ]
+    }
+
+    request =
+      Req.new(url: "/models/gemini-2.0-flash-exp-image-generation:generateContent")
+      |> Req.Request.register_options([
+        :operation,
+        :model,
+        :context
+      ])
+      |> Req.Request.merge_options(
+        operation: :image,
+        model: "gemini-2.0-flash-exp-image-generation",
+        context: context
+      )
+
+    encoded = Google.encode_body(request)
+    body = Jason.decode!(encoded.body)
+
+    assert is_nil(body["generationConfig"])
   end
 
   test "decode_response/1 converts inlineData to ContentPart.image" do
