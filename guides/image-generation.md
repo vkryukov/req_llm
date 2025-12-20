@@ -216,6 +216,48 @@ Note: `gemini-2.5-flash-image` and `gemini-3-pro-image-preview` reject `n`; spec
 )
 ```
 
+### Generating Multiple Images
+
+**Important:** Google's documentation states that "the model won't always follow the exact number of image outputs that the user explicitly asks for." Multi-image generation is inherently unreliable, and prompt phrasing significantly affects success rates.
+
+**Effective prompt patterns** (higher success rate):
+
+```elixir
+# Numbered list format - works well
+{:ok, response} = ReqLLM.generate_image(
+  "google:gemini-2.5-flash-image",
+  "Generate multiple images: 1) A white cat 2) A black cat"
+)
+
+# Sequential instructions - works well
+{:ok, response} = ReqLLM.generate_image(
+  "google:gemini-2.5-flash-image",
+  "Generate the first image of a sunrise, then generate a second image of a sunset"
+)
+
+# Labeled scenes - works well
+{:ok, response} = ReqLLM.generate_image(
+  "google:gemini-2.5-flash-image",
+  "Generate multiple scenes: Scene A shows a forest, Scene B shows a desert"
+)
+
+images = ReqLLM.Response.images(response)
+# May return 1 or 2 images depending on model behavior
+```
+
+**Less effective prompt patterns** (often returns only 1 image):
+
+```elixir
+# Simple count requests - often fails
+"Generate two images of cats"
+"Create 2 pictures of a banana"
+
+# Even with emphasis - often fails
+"Create two DISTINCT and SEPARATE images"
+```
+
+The model may respond with text like "here are two images" but only deliver one. For reliable multi-image workflows, consider making multiple API calls or using the numbered list format above.
+
 ### Aspect Ratios
 
 Google supports flexible aspect ratios:

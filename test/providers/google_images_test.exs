@@ -44,7 +44,8 @@ defmodule ReqLLM.Providers.GoogleImagesTest do
     assert get_in(body, ["contents", Access.at(0), "parts", Access.at(0), "text"]) ==
              "A cat in space"
 
-    assert get_in(body, ["contents", Access.at(0), "role"]) == nil
+    # Role is kept intentionally - experiments show it improves multi-image generation success
+    assert get_in(body, ["contents", Access.at(0), "role"]) == "user"
   end
 
   test "prepare_request/3 rejects n for gemini image models" do
