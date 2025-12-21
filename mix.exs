@@ -205,6 +205,7 @@ defmodule ReqLLM.MixProject do
 
   defp aliases do
     [
+      setup: ["deps.get", "git_hooks.install"],
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
