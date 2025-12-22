@@ -20,7 +20,8 @@ defmodule ReqLLM.Images do
   @base_schema NimbleOptions.new!(
                  n: [
                    type: :pos_integer,
-                   doc: "Number of images to generate (provider/model dependent; gemini-2.5-flash-image and gemini-3-pro-image-preview reject :n and require prompting)"
+                   doc:
+                     "Number of images to generate (provider/model dependent; gemini-2.5-flash-image and gemini-3-pro-image-preview reject :n and require prompting)"
                  ],
                  size: [
                    type: {:or, [:string, {:tuple, [:pos_integer, :pos_integer]}]},
@@ -109,7 +110,8 @@ defmodule ReqLLM.Images do
   def generate_image(model_spec, prompt_or_messages, opts \\ []) do
     with {:ok, model} <- ReqLLM.model(model_spec),
          {:ok, provider_module} <- ReqLLM.provider(model.provider),
-         {:ok, request} <- provider_module.prepare_request(:image, model, prompt_or_messages, opts),
+         {:ok, request} <-
+           provider_module.prepare_request(:image, model, prompt_or_messages, opts),
          {:ok, %Req.Response{status: status, body: response}} when status in 200..299 <-
            Req.request(request) do
       {:ok, response}

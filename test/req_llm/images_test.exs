@@ -1,9 +1,9 @@
 defmodule ReqLLM.ImagesTest do
   use ExUnit.Case, async: true
 
-  alias ReqLLM.{Context, Images}
   alias ReqLLM.Provider.Options
   alias ReqLLM.Providers.Google
+  alias ReqLLM.{Context, Images}
 
   test "supported_models/0 includes known image models by heuristic" do
     models = Images.supported_models()

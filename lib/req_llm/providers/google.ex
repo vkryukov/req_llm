@@ -750,9 +750,9 @@ defmodule ReqLLM.Providers.Google do
     generation_config =
       %{}
       |> maybe_put_google_aspect_ratio(request.options[:aspect_ratio])
-      |> maybe_put("candidateCount", image_candidate_count(request.options))
+      |> maybe_put(:candidateCount, image_candidate_count(request.options))
 
-    generation_config = if generation_config == %{}, do: nil, else: generation_config
+    generation_config = if generation_config != %{}, do: generation_config
 
     %{}
     |> maybe_put(:systemInstruction, system_instruction)
@@ -766,16 +766,12 @@ defmodule ReqLLM.Providers.Google do
         {:ok, value} -> value
         :error -> nil
       end
-    else
-      nil
     end
   end
 
   defp image_candidate_count(opts) when is_map(opts) do
     if Map.get(opts, :image_n_provided, false) and Map.has_key?(opts, :n) do
       Map.get(opts, :n)
-    else
-      nil
     end
   end
 
@@ -808,8 +804,6 @@ defmodule ReqLLM.Providers.Google do
         :error
     end
   end
-
-  defp parse_size(_), do: :error
 
   defp infer_aspect_ratio(w, h) when is_integer(w) and is_integer(h) and w > 0 and h > 0 do
     gcd = Integer.gcd(w, h)

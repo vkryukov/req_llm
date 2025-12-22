@@ -465,7 +465,9 @@ defmodule ReqLLM.Provider.Options do
   end
 
   defp maybe_extract_model_options(:image, _model, opts), do: opts
-  defp maybe_extract_model_options(_operation, model, opts), do: extract_model_options(model, opts)
+
+  defp maybe_extract_model_options(_operation, model, opts),
+    do: extract_model_options(model, opts)
 
   defp normalize_stop_sequences(opts) do
     case Keyword.pop(opts, :stop_sequences) do

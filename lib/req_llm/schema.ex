@@ -297,6 +297,7 @@ defmodule ReqLLM.Schema do
     json
     |> maybe_put_description(meta)
     |> Map.put("properties", updated_props)
+    |> Map.put("additionalProperties", false)
   end
 
   defp inject_zoi_metadata(%Zoi.Types.Array{meta: meta, inner: inner}, json) do
