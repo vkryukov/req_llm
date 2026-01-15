@@ -170,9 +170,12 @@ defmodule ReqLLM.Providers.OpenRouter do
 
     opts =
       case reasoning_effort do
+        :none -> Keyword.put(opts, :reasoning_effort, "none")
+        :minimal -> Keyword.put(opts, :reasoning_effort, "minimal")
         :low -> Keyword.put(opts, :reasoning_effort, "low")
         :medium -> Keyword.put(opts, :reasoning_effort, "medium")
         :high -> Keyword.put(opts, :reasoning_effort, "high")
+        :xhigh -> Keyword.put(opts, :reasoning_effort, "xhigh")
         :default -> opts
         nil -> opts
         other -> Keyword.put(opts, :reasoning_effort, other)

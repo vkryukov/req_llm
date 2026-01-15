@@ -459,6 +459,39 @@ defmodule ReqLLM.Providers.Azure.AnthropicTest do
              )
     end
 
+    test "reasoning_effort :none disables thinking" do
+      model = %LLMDB.Model{
+        id: "claude-3-sonnet",
+        provider: :azure,
+        capabilities: %{reasoning: %{enabled: true}}
+      }
+
+      opts = [reasoning_effort: :none]
+
+      {translated, _warnings} = Azure.Anthropic.pre_validate_options(:chat, model, opts)
+
+      # :none should not enable thinking
+      provider_opts = translated[:provider_options] || []
+      additional_fields = provider_opts[:additional_model_request_fields]
+      refute additional_fields[:thinking]
+    end
+
+    test "reasoning_effort :minimal uses minimal budget" do
+      model = %LLMDB.Model{
+        id: "claude-3-sonnet",
+        provider: :azure,
+        capabilities: %{reasoning: %{enabled: true}}
+      }
+
+      opts = [reasoning_effort: :minimal]
+
+      {translated, _warnings} = Azure.Anthropic.pre_validate_options(:chat, model, opts)
+
+      provider_opts = translated[:provider_options]
+      additional_fields = provider_opts[:additional_model_request_fields]
+      assert additional_fields[:thinking] == %{type: "enabled", budget_tokens: 512}
+    end
+
     test "warns and removes json_schema response_format" do
       import ExUnit.CaptureLog
 

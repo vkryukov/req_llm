@@ -548,6 +548,29 @@ defmodule ReqLLM.Providers.GoogleTest do
                "Expected #{provider_option} to be in supported options"
       end
     end
+
+    test "translate_options maps reasoning_effort to google_thinking_budget" do
+      {:ok, model} = ReqLLM.model("google:gemini-1.5-flash")
+
+      test_cases = [
+        {:none, 0},
+        {:minimal, 2_048},
+        {:low, 4_096},
+        {:medium, 8_192},
+        {:high, 16_384},
+        {:xhigh, 32_768}
+      ]
+
+      for {effort, expected_budget} <- test_cases do
+        opts = [reasoning_effort: effort]
+        {translated_opts, _warnings} = Google.translate_options(:chat, model, opts)
+
+        provider_opts = Keyword.get(translated_opts, :provider_options, [])
+
+        assert Keyword.get(provider_opts, :google_thinking_budget) == expected_budget,
+               "Expected reasoning_effort #{inspect(effort)} to map to budget #{expected_budget}"
+      end
+    end
   end
 
   describe "usage extraction" do

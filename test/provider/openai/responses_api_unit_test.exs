@@ -160,6 +160,33 @@ defmodule Provider.OpenAI.ResponsesAPIUnitTest do
       assert body["reasoning"] == %{"effort" => "high"}
     end
 
+    test "encodes reasoning effort :none" do
+      request = build_request(reasoning_effort: :none)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = Jason.decode!(encoded.body)
+
+      assert body["reasoning"] == %{"effort" => "none"}
+    end
+
+    test "encodes reasoning effort :minimal" do
+      request = build_request(reasoning_effort: :minimal)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = Jason.decode!(encoded.body)
+
+      assert body["reasoning"] == %{"effort" => "minimal"}
+    end
+
+    test "encodes reasoning effort :xhigh" do
+      request = build_request(reasoning_effort: :xhigh)
+
+      encoded = ResponsesAPI.encode_body(request)
+      body = Jason.decode!(encoded.body)
+
+      assert body["reasoning"] == %{"effort" => "xhigh"}
+    end
+
     test "omits reasoning effort when nil" do
       request = build_request(provider_options: [])
 

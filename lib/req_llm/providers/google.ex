@@ -622,9 +622,18 @@ defmodule ReqLLM.Providers.Google do
     {Keyword.put(rest, :provider_options, provider_opts), []}
   end
 
+  defp translate_reasoning_effort_to_budget(:none, _model), do: 0
+  defp translate_reasoning_effort_to_budget(:minimal, _model), do: 2_048
   defp translate_reasoning_effort_to_budget(:low, _model), do: 4_096
   defp translate_reasoning_effort_to_budget(:medium, _model), do: 8_192
   defp translate_reasoning_effort_to_budget(:high, _model), do: 16_384
+  defp translate_reasoning_effort_to_budget(:xhigh, _model), do: 32_768
+
+  defp translate_reasoning_effort_to_budget("none", model),
+    do: translate_reasoning_effort_to_budget(:none, model)
+
+  defp translate_reasoning_effort_to_budget("minimal", model),
+    do: translate_reasoning_effort_to_budget(:minimal, model)
 
   defp translate_reasoning_effort_to_budget("low", model),
     do: translate_reasoning_effort_to_budget(:low, model)
@@ -634,6 +643,9 @@ defmodule ReqLLM.Providers.Google do
 
   defp translate_reasoning_effort_to_budget("high", model),
     do: translate_reasoning_effort_to_budget(:high, model)
+
+  defp translate_reasoning_effort_to_budget("xhigh", model),
+    do: translate_reasoning_effort_to_budget(:xhigh, model)
 
   defp translate_reasoning_effort_to_budget(budget, _model) when is_integer(budget), do: budget
   defp translate_reasoning_effort_to_budget(_unknown, _model), do: 8_192
