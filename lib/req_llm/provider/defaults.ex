@@ -609,6 +609,7 @@ defmodule ReqLLM.Provider.Defaults do
 
   defp maybe_add_field(message, _key, nil), do: message
   defp maybe_add_field(message, _key, []), do: message
+  defp maybe_add_field(message, _key, %{} = value) when map_size(value) == 0, do: message
   defp maybe_add_field(message, key, value), do: Map.put(message, key, value)
 
   defp encode_openai_content(content) when is_binary(content), do: content
