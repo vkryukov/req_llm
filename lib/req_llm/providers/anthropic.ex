@@ -329,7 +329,7 @@ defmodule ReqLLM.Providers.Anthropic do
         Map.get(server_tool_use, :web_search_requests)
 
     if is_number(web_search) and web_search > 0 do
-      Map.put(usage, :tool_usage, %{web_search: %{count: web_search, unit: :call}})
+      Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, web_search))
     else
       usage
     end

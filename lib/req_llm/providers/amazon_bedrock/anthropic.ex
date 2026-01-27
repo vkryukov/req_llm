@@ -129,7 +129,8 @@ defmodule ReqLLM.Providers.AmazonBedrock.Anthropic do
   """
   def parse_response(body, opts) when is_map(body) do
     # Create a model struct for Anthropic.Response.decode_response
-    model_id = normalize_model_id(Map.get(body, "model") || opts[:model], "bedrock-anthropic")
+    model_id =
+      ReqLLM.ModelId.normalize(Map.get(body, "model") || opts[:model], "bedrock-anthropic")
 
     model = LLMDB.Model.new!(%{id: model_id, provider: :anthropic})
 
@@ -162,7 +163,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.Anthropic do
     # First, unwrap the Bedrock AWS event stream encoding
     with {:ok, event} <- AmazonBedrock.Response.unwrap_stream_chunk(chunk) do
       # Create a model struct for Anthropic.Response.decode_stream_event
-      model_id = normalize_model_id(opts[:model], "bedrock-anthropic")
+      model_id = ReqLLM.ModelId.normalize(opts[:model], "bedrock-anthropic")
       model = LLMDB.Model.new!(%{id: model_id, provider: :anthropic})
 
       # Delegate to native Anthropic SSE event parsing
@@ -178,10 +179,6 @@ defmodule ReqLLM.Providers.AmazonBedrock.Anthropic do
   rescue
     e -> {:error, "Failed to parse stream chunk: #{inspect(e)}"}
   end
-
-  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(_, fallback), do: fallback
 
   @doc """
   Extracts usage metadata from the response body.

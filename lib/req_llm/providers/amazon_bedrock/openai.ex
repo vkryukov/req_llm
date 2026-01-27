@@ -245,7 +245,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAI do
 
         _ ->
           # Create a model struct for SSE decoding
-          model_id = normalize_model_id(opts[:model], "bedrock-openai")
+          model_id = ReqLLM.ModelId.normalize(opts[:model], "bedrock-openai")
 
           model = LLMDB.Model.new!(%{id: model_id, provider: :openai})
 
@@ -265,10 +265,6 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAI do
   rescue
     e -> {:error, "Failed to parse stream chunk: #{inspect(e)}"}
   end
-
-  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(_, fallback), do: fallback
 
   @doc """
   Extracts usage metadata from the response body.

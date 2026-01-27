@@ -200,7 +200,7 @@ defmodule ReqLLM.Providers.Azure.Anthropic do
         "azure-anthropic"
       end
 
-    model_id = normalize_model_id(model_id, "azure-anthropic")
+    model_id = ReqLLM.ModelId.normalize(model_id, "azure-anthropic")
     anthropic_model = LLMDB.Model.new!(%{id: model_id, provider: :anthropic})
 
     case Anthropic.Response.decode_response(body, anthropic_model) do
@@ -265,10 +265,6 @@ defmodule ReqLLM.Providers.Azure.Anthropic do
   def maybe_clean_thinking_after_translation(opts, operation) do
     PlatformReasoning.maybe_clean_thinking_after_translation(opts, operation)
   end
-
-  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(_, fallback), do: fallback
 
   defp maybe_translate_reasoning_params(model, opts) do
     {reasoning_effort, opts} = Keyword.pop(opts, :reasoning_effort)

@@ -622,7 +622,7 @@ defmodule ReqLLM.Providers.Google do
     if queries == [] do
       %{}
     else
-      unit = web_search_unit(model)
+      unit = ReqLLM.Pricing.tool_unit(model, :web_search)
 
       count =
         case unit do
@@ -631,7 +631,7 @@ defmodule ReqLLM.Providers.Google do
           _ -> 1
         end
 
-      %{web_search: %{count: count, unit: unit || :call}}
+      ReqLLM.Usage.Tool.build(:web_search, count, unit)
     end
   end
 
@@ -641,27 +641,11 @@ defmodule ReqLLM.Providers.Google do
     count =
       Enum.reduce(candidates, 0, fn candidate, acc ->
         parts = get_in(candidate, ["content", "parts"]) || []
-        acc + Enum.count(parts, &image_part?/1)
+        acc + ReqLLM.Usage.Image.count_inline_parts(parts)
       end)
 
-    if count > 0 do
-      %{generated: %{count: count}}
-    else
-      %{}
-    end
+    ReqLLM.Usage.Image.build_generated(count)
   end
-
-  defp image_part?(%{"inlineData" => %{"mimeType" => mime}}) when is_binary(mime) do
-    String.starts_with?(mime, "image/")
-  end
-
-  defp image_part?(%{"inline_data" => %{"mime_type" => mime}}) when is_binary(mime) do
-    String.starts_with?(mime, "image/")
-  end
-
-  defp image_part?(%{"inlineData" => %{}}), do: true
-  defp image_part?(%{"inline_data" => %{}}), do: true
-  defp image_part?(_), do: false
 
   defp maybe_put_image_usage(usage, image_usage) do
     if map_size(image_usage) > 0 do
@@ -670,25 +654,6 @@ defmodule ReqLLM.Providers.Google do
       usage
     end
   end
-
-  defp web_search_unit(%LLMDB.Model{} = model) do
-    pricing = Map.get(model, :pricing) || Map.get(model, "pricing") || %{}
-    components = Map.get(pricing, :components) || Map.get(pricing, "components") || []
-
-    component =
-      Enum.find(components, fn entry ->
-        kind = Map.get(entry, :kind) || Map.get(entry, "kind")
-        tool = Map.get(entry, :tool) || Map.get(entry, "tool")
-        kind in [:tool, "tool"] and tool in [:web_search, "web_search"]
-      end)
-
-    case component do
-      nil -> nil
-      component -> Map.get(component, :unit) || Map.get(component, "unit")
-    end
-  end
-
-  defp web_search_unit(_), do: nil
 
   def pre_validate_options(_operation, model, opts) do
     {provider_opts, rest} = Keyword.pop(opts, :provider_options, [])
@@ -1150,13 +1115,13 @@ defmodule ReqLLM.Providers.Google do
             {req, %{resp | body: normalized}}
 
           :image when not is_streaming ->
-            model_name = normalize_model_id(req.options[:model], "google")
+            model_name = ReqLLM.ModelId.normalize(req.options[:model], "google")
             body = ensure_parsed_body(resp.body)
             merged_response = decode_image_response(req, model_name, body)
             {req, %{resp | body: merged_response}}
 
           :object when not is_streaming ->
-            model_name = normalize_model_id(req.options[:model], "google")
+            model_name = ReqLLM.ModelId.normalize(req.options[:model], "google")
             model = LLMDB.Model.new!(%{id: model_name, provider: :google})
             body = ensure_parsed_body(resp.body)
 
@@ -1183,7 +1148,7 @@ defmodule ReqLLM.Providers.Google do
             ReqLLM.Provider.Defaults.default_decode_response({req, resp})
 
           _ ->
-            model_name = normalize_model_id(req.options[:model], "google")
+            model_name = ReqLLM.ModelId.normalize(req.options[:model], "google")
             model = LLMDB.Model.new!(%{id: model_name, provider: :google})
 
             body = ensure_parsed_body(resp.body)
@@ -1580,10 +1545,6 @@ defmodule ReqLLM.Providers.Google do
   end
 
   defp attach_reasoning_details(response, _details), do: response
-
-  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(_, fallback), do: fallback
 
   defp normalize_google_finish_reason("STOP"), do: "stop"
   defp normalize_google_finish_reason("MAX_TOKENS"), do: "length"

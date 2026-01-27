@@ -292,7 +292,7 @@ defmodule ReqLLM.Providers.XAI do
     sources = Map.get(usage, "num_sources_used") || Map.get(usage, :num_sources_used)
 
     if is_number(sources) and sources > 0 do
-      Map.put(usage, :tool_usage, %{web_search: %{count: sources, unit: :source}})
+      Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, sources, :source))
     else
       usage
     end
@@ -630,7 +630,7 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   defp decode_chat_response(req, resp, operation) do
-    model_name = normalize_model_id(req.options[:model], "xai")
+    model_name = ReqLLM.ModelId.normalize(req.options[:model], "xai")
     model = LLMDB.Model.new!(%{id: model_name, provider: :xai})
     is_streaming = req.options[:stream] == true
 
@@ -739,10 +739,6 @@ defmodule ReqLLM.Providers.XAI do
     context = req.options[:context] || %ReqLLM.Context{messages: []}
     ReqLLM.Context.merge_response(context, response)
   end
-
-  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
-  defp normalize_model_id(_, fallback), do: fallback
 
   @spec sanitize_schema_for_xai(map()) ::
           {:ok, map()} | {:error, ReqLLM.Error.t()}

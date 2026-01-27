@@ -3,23 +3,34 @@ defmodule ReqLLM.Billing do
   Component-based billing calculator for token and tool usage.
   """
 
+  alias ReqLLM.Billing.Component
+  alias ReqLLM.MapAccess
+  alias ReqLLM.Pricing
+  alias ReqLLM.Usage.Image
+  alias ReqLLM.Usage.Tool
+
+  @token_id_map [
+    {"token.input", :input},
+    {"token.output", :output},
+    {"token.reasoning", :reasoning},
+    {"token.cache_read", :cache_read},
+    {"token.cache_write", :cache_write},
+    {"token.cache", :cache}
+  ]
+
   @spec calculate(map(), LLMDB.Model.t() | nil) :: {:ok, map() | nil}
   def calculate(_usage, nil), do: {:ok, nil}
 
   def calculate(usage, %LLMDB.Model{} = model) when is_map(usage) do
-    pricing = Map.get(model, :pricing)
-
     components =
-      case pricing do
-        %{components: comps} when is_list(comps) -> comps
-        %{"components" => comps} when is_list(comps) -> comps
-        _ -> []
-      end
+      model
+      |> Pricing.components()
+      |> Enum.map(&Component.from/1)
 
     if components == [] do
       token_cost_fallback(usage, Map.get(model, :cost))
     else
-      {:ok, compute_costs(usage, pricing)}
+      {:ok, compute_costs(usage, components)}
     end
   end
 
@@ -45,8 +56,7 @@ defmodule ReqLLM.Billing do
     end
   end
 
-  defp compute_costs(usage, pricing) do
-    components = Map.get(pricing, :components) || Map.get(pricing, "components") || []
+  defp compute_costs(usage, components) do
     usage = adjust_output_for_reasoning(usage, components)
 
     {line_items, totals} =
@@ -57,19 +67,20 @@ defmodule ReqLLM.Billing do
               updated_totals = Map.update!(totals_acc, kind, &Float.round(&1 + cost, 6))
 
               item = %{
-                id: component_id(component),
+                id: component.id,
                 count: count,
                 cost: cost,
                 kind: kind
               }
 
-              {items ++ [item], updated_totals}
+              {[item | items], updated_totals}
 
             :skip ->
               {items, totals_acc}
           end
       end)
 
+    line_items = Enum.reverse(line_items)
     token_costs = token_cost_breakdown(line_items)
 
     total_cost =
@@ -92,12 +103,15 @@ defmodule ReqLLM.Billing do
 
   defp adjust_output_for_reasoning(usage, components) do
     add_reasoning =
-      Map.get(usage, :add_reasoning_to_cost) || Map.get(usage, "add_reasoning_to_cost")
+      MapAccess.get(usage, :add_reasoning_to_cost) ||
+        MapAccess.get(usage, "add_reasoning_to_cost")
 
     has_reasoning_component =
       Enum.any?(components, fn component ->
-        id = component_id(component)
-        is_binary(id) and String.starts_with?(id, "token.reasoning")
+        case Component.id_string(component) do
+          id when is_binary(id) -> String.starts_with?(id, "token.reasoning")
+          _ -> false
+        end
       end)
 
     if add_reasoning && not has_reasoning_component do
@@ -109,158 +123,96 @@ defmodule ReqLLM.Billing do
     end
   end
 
-  defp component_cost(component, usage) do
-    per = Map.get(component, :per) || Map.get(component, "per")
-    rate = Map.get(component, :rate) || Map.get(component, "rate")
+  defp component_cost(%Component{} = component, usage) do
+    per = component.per
+    rate = component.rate
 
-    if is_number(per) and per > 0 and is_number(rate) do
-      case component_kind(component) do
-        nil ->
+    if is_number(per) and per > 0 and is_number(rate) and component.kind != nil do
+      case component_count(component, usage) do
+        count when is_number(count) and count > 0 ->
+          cost = Float.round(count / per * rate, 6)
+          {:ok, count, cost, component.kind}
+
+        _ ->
           :skip
-
-        kind ->
-          case component_count(component, usage) do
-            count when is_number(count) and count > 0 ->
-              cost = Float.round(count / per * rate, 6)
-              {:ok, count, cost, kind}
-
-            _ ->
-              :skip
-          end
       end
     else
       :skip
     end
   end
 
-  defp component_count(component, usage) do
-    kind = component_kind(component)
-    meter = Map.get(component, :meter) || Map.get(component, "meter")
-
+  defp component_count(%Component{} = component, usage) do
     cond do
-      is_binary(meter) ->
-        usage_value(usage, meter)
+      is_binary(component.meter) ->
+        usage_value(usage, component.meter)
 
-      kind == :tokens ->
+      component.kind == :tokens ->
         token_usage_count(component, usage)
 
-      kind == :tools ->
-        tool_usage_count(component, usage)
+      component.kind == :tools ->
+        Tool.count(usage, component.tool, component.unit)
 
-      kind == :images ->
-        image_usage_count(component, usage)
+      component.kind == :images ->
+        Image.count_generated(usage, component.size_class)
 
-      kind == :storage ->
+      component.kind == :storage ->
         usage_value(usage, "storage")
 
       true ->
-        usage_value(usage, component_id(component))
+        usage_value(usage, component.id)
     end
   end
 
   defp token_usage_count(component, usage) do
-    id = component_id(component)
+    id = Component.id_string(component) || component.id
     input_includes_cached = input_includes_cached?(usage)
 
     cached_read = usage_value(usage, "cached_tokens")
     cache_write = usage_value(usage, "cache_creation_tokens")
 
-    case id do
-      value when is_binary(value) ->
-        cond do
-          String.starts_with?(value, "token.input") ->
-            input_tokens = usage_value(usage, "input_tokens")
+    case token_meter_for_id(id) do
+      :input ->
+        input_tokens = usage_value(usage, "input_tokens")
 
-            if input_includes_cached do
-              max(input_tokens - cached_read - cache_write, 0)
-            else
-              input_tokens
-            end
-
-          String.starts_with?(value, "token.output") ->
-            usage_value(usage, "output_tokens")
-
-          String.starts_with?(value, "token.reasoning") ->
-            usage_value(usage, "reasoning_tokens")
-
-          String.starts_with?(value, "token.cache_read") ->
-            cached_read
-
-          String.starts_with?(value, "token.cache_write") ->
-            cache_write
-
-          String.starts_with?(value, "token.cache") ->
-            cached_read
-
-          true ->
-            usage_value(usage, value)
+        if input_includes_cached do
+          max(input_tokens - cached_read - cache_write, 0)
+        else
+          input_tokens
         end
 
-      _ ->
+      :output ->
+        usage_value(usage, "output_tokens")
+
+      :reasoning ->
+        usage_value(usage, "reasoning_tokens")
+
+      :cache_read ->
+        cached_read
+
+      :cache_write ->
+        cache_write
+
+      :cache ->
+        cached_read
+
+      nil ->
         usage_value(usage, id)
     end
   end
 
-  defp component_kind(component) do
-    kind = Map.get(component, :kind) || Map.get(component, "kind")
+  defp token_meter_for_id(id) when is_binary(id) do
+    Enum.find_value(@token_id_map, fn {prefix, key} ->
+      if String.starts_with?(id, prefix), do: key
+    end)
+  end
 
-    case kind do
-      :token -> :tokens
-      "token" -> :tokens
-      :tool -> :tools
-      "tool" -> :tools
-      :image -> :images
-      "image" -> :images
-      :storage -> :storage
-      "storage" -> :storage
-      _ -> nil
+  defp token_meter_for_id(_), do: nil
+
+  defp usage_value(usage, key) do
+    case MapAccess.get(usage, key) do
+      nil -> 0
+      value -> value
     end
-  end
-
-  defp component_id(component) do
-    Map.get(component, :id) || Map.get(component, "id")
-  end
-
-  defp usage_value(usage, key) when is_binary(key) do
-    Map.get(usage, key) ||
-      case existing_atom(key) do
-        nil -> 0
-        atom -> Map.get(usage, atom) || 0
-      end
-  end
-
-  defp usage_value(usage, key), do: Map.get(usage, key) || 0
-
-  defp tool_usage_count(component, usage) do
-    tool = Map.get(component, :tool) || Map.get(component, "tool")
-    tool_key = normalize_tool_key(tool)
-    tool_usage = Map.get(usage, :tool_usage) || Map.get(usage, "tool_usage") || %{}
-    entry = tool_usage_entry(tool_usage, tool_key)
-    count = Map.get(entry, :count) || Map.get(entry, "count") || 0
-    component_unit = component_unit(component)
-    usage_unit = usage_unit(entry)
-
-    if unit_match?(component_unit, usage_unit) do
-      count
-    else
-      0
-    end
-  end
-
-  defp normalize_tool_key(tool) when is_atom(tool), do: tool
-  defp normalize_tool_key(tool) when is_binary(tool), do: tool
-  defp normalize_tool_key(_), do: :unknown
-
-  defp tool_usage_entry(tool_usage, key) when is_atom(key) do
-    Map.get(tool_usage, key) || Map.get(tool_usage, Atom.to_string(key)) || %{}
-  end
-
-  defp tool_usage_entry(tool_usage, key) when is_binary(key) do
-    Map.get(tool_usage, key) ||
-      case existing_atom(key) do
-        nil -> %{}
-        atom -> Map.get(tool_usage, atom) || %{}
-      end
   end
 
   defp input_includes_cached?(usage) do
@@ -272,49 +224,6 @@ defmodule ReqLLM.Billing do
         case Map.fetch(usage, "input_includes_cached") do
           {:ok, value} when is_boolean(value) -> value
           _ -> true
-        end
-    end
-  end
-
-  defp component_unit(component) do
-    normalize_unit(Map.get(component, :unit) || Map.get(component, "unit"))
-  end
-
-  defp usage_unit(entry) do
-    normalize_unit(Map.get(entry, :unit) || Map.get(entry, "unit"))
-  end
-
-  defp unit_match?(component_unit, usage_unit) do
-    component_unit == nil or usage_unit == nil or component_unit == usage_unit
-  end
-
-  defp normalize_unit(nil), do: nil
-  defp normalize_unit(unit) when is_atom(unit), do: Atom.to_string(unit)
-  defp normalize_unit(unit) when is_binary(unit), do: unit
-  defp normalize_unit(_), do: nil
-
-  defp existing_atom(value) when is_binary(value) do
-    String.to_existing_atom(value)
-  rescue
-    ArgumentError -> nil
-  end
-
-  defp image_usage_count(component, usage) do
-    usage_map = Map.get(usage, :image_usage) || Map.get(usage, "image_usage") || %{}
-    generated = Map.get(usage_map, :generated) || Map.get(usage_map, "generated") || %{}
-    size_class = Map.get(component, :size_class) || Map.get(component, "size_class")
-
-    case size_class do
-      nil ->
-        Map.get(generated, :count) || Map.get(generated, "count") || 0
-
-      _ ->
-        usage_size = Map.get(generated, :size_class) || Map.get(generated, "size_class")
-
-        if usage_size == size_class do
-          Map.get(generated, :count) || Map.get(generated, "count") || 0
-        else
-          0
         end
     end
   end

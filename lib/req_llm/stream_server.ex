@@ -901,134 +901,13 @@ defmodule ReqLLM.StreamServer do
   # Normalize streaming usage data from provider format to ReqLLM format
   # This mirrors the logic in ReqLLM.Step.Usage.fallback_extract_usage/1
   defp normalize_streaming_usage(usage, model) when is_map(usage) do
-    case usage do
-      %{"prompt_tokens" => input, "completion_tokens" => output} ->
-        reasoning = reasoning_from_usage(usage)
-        cached_input = cached_from_usage(usage)
-        cache_creation = cache_creation_from_usage(usage)
-
-        %{
-          input: input,
-          output: output,
-          reasoning: reasoning,
-          cached_input: cached_input,
-          cache_creation: cache_creation,
-          tool_usage:
-            ReqLLM.Usage.Normalize.tool_usage(
-              Map.get(usage, "tool_usage") || Map.get(usage, :tool_usage)
-            ),
-          image_usage:
-            ReqLLM.Usage.Normalize.image_usage(
-              Map.get(usage, "image_usage") || Map.get(usage, :image_usage)
-            )
-        }
-        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
-        |> add_token_aliases()
-        |> add_cost_calculation_if_available(usage)
-        |> calculate_cost_if_model_available(model)
-
-      %{"input_tokens" => input, "output_tokens" => output} ->
-        reasoning = reasoning_from_usage(usage)
-        cached_input = cached_from_usage(usage)
-        cache_creation = cache_creation_from_usage(usage)
-
-        %{
-          input: input,
-          output: output,
-          reasoning: reasoning,
-          cached_input: cached_input,
-          cache_creation: cache_creation,
-          tool_usage:
-            ReqLLM.Usage.Normalize.tool_usage(
-              Map.get(usage, "tool_usage") || Map.get(usage, :tool_usage)
-            ),
-          image_usage:
-            ReqLLM.Usage.Normalize.image_usage(
-              Map.get(usage, "image_usage") || Map.get(usage, :image_usage)
-            )
-        }
-        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
-        |> add_token_aliases()
-        |> add_cost_calculation_if_available(usage)
-        |> calculate_cost_if_model_available(model)
-
-      %{input_tokens: input, output_tokens: output} ->
-        reasoning = Map.get(usage, :reasoning_tokens, 0)
-        # Prefer cache_read_input_tokens over legacy cached_tokens
-        cached_input =
-          Map.get(usage, :cache_read_input_tokens) ||
-            Map.get(usage, :cached_tokens, 0)
-
-        cache_creation = Map.get(usage, :cache_creation_input_tokens, 0)
-
-        %{
-          input: input,
-          output: output,
-          reasoning: reasoning,
-          cached_input: cached_input,
-          cache_creation: cache_creation,
-          tool_usage: ReqLLM.Usage.Normalize.tool_usage(Map.get(usage, :tool_usage)),
-          image_usage: ReqLLM.Usage.Normalize.image_usage(Map.get(usage, :image_usage))
-        }
-        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
-        |> add_token_aliases()
-        |> add_cost_calculation_if_available(usage)
-        |> calculate_cost_if_model_available(model)
-
-      _ ->
-        usage
-    end
+    usage
+    |> ReqLLM.Usage.Normalize.normalize()
+    |> add_cost_calculation_if_available(usage)
+    |> calculate_cost_if_model_available(model)
   end
 
   defp normalize_streaming_usage(usage, _model), do: usage
-
-  defp reasoning_from_usage(usage) do
-    get_in(usage, ["completion_tokens_details", "reasoning_tokens"]) ||
-      get_in(usage, ["output_tokens_details", "reasoning_tokens"]) ||
-      Map.get(usage, "reasoning_tokens", 0) ||
-      Map.get(usage, "reasoning_output_tokens", 0)
-  end
-
-  defp cached_from_usage(usage) do
-    Map.get(usage, "cache_read_input_tokens") ||
-      Map.get(usage, "cacheReadInputTokens") ||
-      Map.get(usage, "cacheReadInputTokenCount") ||
-      get_in(usage, ["prompt_tokens_details", "cached_tokens"]) ||
-      get_in(usage, ["input_tokens_details", "cached_tokens"]) ||
-      Map.get(usage, "cached_tokens", 0)
-  end
-
-  defp cache_creation_from_usage(usage) do
-    Map.get(usage, "cache_creation_input_tokens") ||
-      Map.get(usage, "cacheWriteInputTokens") ||
-      Map.get(usage, "cacheWriteInputTokenCount") ||
-      Map.get(usage, "cache_write_input_tokens", 0)
-  end
-
-  defp add_token_aliases(usage) do
-    usage
-    |> Map.put(:input_tokens, usage.input)
-    |> Map.put(:output_tokens, usage.output)
-    |> maybe_put_total_tokens(safe_total_tokens(usage.input, usage.output))
-    |> Map.put(:cached_tokens, usage.cached_input)
-    |> Map.put(:cache_creation_tokens, usage.cache_creation)
-  end
-
-  defp safe_total_tokens(input, output) when is_number(input) and is_number(output) do
-    input + output
-  end
-
-  defp safe_total_tokens(_input, _output), do: nil
-
-  defp maybe_put_total_tokens(map, total) when is_number(total) do
-    Map.put_new(map, :total_tokens, total)
-  end
-
-  defp maybe_put_total_tokens(map, _total), do: map
-
-  defp total_tokens_from_usage(usage) do
-    Map.get(usage, "total_tokens") || Map.get(usage, :total_tokens)
-  end
 
   defp add_cost_calculation_if_available(normalized_usage, original_usage) do
     case original_usage do
