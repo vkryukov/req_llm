@@ -50,16 +50,13 @@ defmodule ReqLLM.Step.Usage do
   @doc false
   @spec handle({Req.Request.t(), Req.Response.t()}) :: {Req.Request.t(), Req.Response.t()}
   def handle({req, resp}) do
-    provider_module = get_provider_module(req)
-
-    with {:ok, usage} <- extract_usage(resp.body, provider_module),
-         {:ok, model} <- fetch_model(req),
+    with {:ok, model} <- fetch_model(req),
+         provider_module = provider_module_from_model(model),
+         {:ok, usage} <- extract_usage(resp.body, provider_module, model),
          {:ok, cost_breakdown} <- compute_cost_breakdown(usage, model) do
-      # Keep legacy total cost for telemetry compatibility
       total_cost = cost_breakdown && cost_breakdown.total_cost
       meta = %{tokens: usage, cost: total_cost}
 
-      # Add cost breakdown to meta if available
       meta =
         if cost_breakdown do
           Map.merge(meta, %{
@@ -71,18 +68,14 @@ defmodule ReqLLM.Step.Usage do
           meta
         end
 
-      # Emit telemetry event for monitoring
       :telemetry.execute(@event, meta, %{model: model})
 
-      # Store usage data in response private for access by callers
       req_llm_data = Map.get(resp.private, :req_llm, %{})
       updated_req_llm_data = Map.put(req_llm_data, :usage, meta)
 
-      # Update Response.usage field with cost information if resp.body is a Response
       updated_resp =
         case resp.body do
-          %ReqLLM.Response{usage: response_usage}
-          when is_map(response_usage) and cost_breakdown != nil ->
+          %ReqLLM.Response{usage: response_usage} when is_map(response_usage) ->
             cached_read_tokens = usage[:cached_input] || 0
             cache_creation_tokens = usage[:cache_creation] || 0
 
@@ -90,15 +83,13 @@ defmodule ReqLLM.Step.Usage do
               response_usage
               |> Map.put_new(:input_tokens, usage.input)
               |> Map.put_new(:output_tokens, usage.output)
-              |> Map.put_new(:total_tokens, usage.input + usage.output)
+              |> maybe_put_total_tokens(usage.input, usage.output)
               |> Map.put(:reasoning_tokens, usage.reasoning)
               |> Map.put(:cached_tokens, cached_read_tokens)
               |> Map.put(:cache_creation_tokens, cache_creation_tokens)
-              |> Map.merge(%{
-                input_cost: cost_breakdown.input_cost,
-                output_cost: cost_breakdown.output_cost,
-                total_cost: cost_breakdown.total_cost
-              })
+              |> Map.put(:tool_usage, usage.tool_usage)
+              |> Map.put(:image_usage, usage.image_usage)
+              |> maybe_merge_cost(cost_breakdown)
 
             updated_body = %{resp.body | usage: augmented_usage}
             %{resp | body: updated_body}
@@ -118,31 +109,25 @@ defmodule ReqLLM.Step.Usage do
     end
   end
 
-  @spec get_provider_module(Req.Request.t()) :: module() | nil
-  defp get_provider_module(%Req.Request{options: options}) do
-    case options[:model] do
-      %LLMDB.Model{provider: provider_id} ->
-        case ReqLLM.provider(provider_id) do
-          {:ok, module} -> module
-          _ -> nil
-        end
-
-      _ ->
-        nil
+  @spec provider_module_from_model(LLMDB.Model.t()) :: module() | nil
+  defp provider_module_from_model(%LLMDB.Model{provider: provider_id}) do
+    case ReqLLM.provider(provider_id) do
+      {:ok, module} -> module
+      _ -> nil
     end
   end
 
-  @spec extract_usage(any, module() | nil) :: {:ok, map()} | :error
-  defp extract_usage(body, provider_module) do
+  @spec extract_usage(any, module() | nil, LLMDB.Model.t() | nil) :: {:ok, map()} | :error
+  defp extract_usage(body, provider_module, model) do
     case provider_module do
       nil -> fallback_extract_usage(body)
-      module -> provider_extract_usage(body, module) || fallback_extract_usage(body)
+      module -> provider_extract_usage(body, module, model) || fallback_extract_usage(body)
     end
   end
 
-  defp provider_extract_usage(body, module) when is_atom(module) do
+  defp provider_extract_usage(body, module, model) when is_atom(module) do
     if function_exported?(module, :extract_usage, 2) do
-      case module.extract_usage(body, nil) do
+      case module.extract_usage(body, model) do
         {:ok, usage} -> {:ok, normalize_usage(usage)}
         _ -> nil
       end
@@ -176,19 +161,66 @@ defmodule ReqLLM.Step.Usage do
       usage[:input] || usage["input"] || usage["prompt_tokens"] || usage[:prompt_tokens] ||
         usage["input_tokens"] || usage[:input_tokens] || 0
 
+    output =
+      usage[:output] || usage["output"] || usage["completion_tokens"] ||
+        usage[:completion_tokens] || usage["output_tokens"] || usage[:output_tokens] || 0
+
+    reasoning =
+      usage[:reasoning] || usage["reasoning"] || usage[:reasoning_tokens] ||
+        usage["reasoning_tokens"] || get_reasoning_tokens(usage) || 0
+
+    cached_input = get_cached_input_tokens(usage, input, input_includes_cached)
+    cache_creation = get_cache_creation_tokens(usage, input, input_includes_cached)
+
+    total_tokens = total_tokens_from_usage(usage, input, output)
+
     %{
       input: input,
-      output:
-        usage[:output] || usage["output"] || usage["completion_tokens"] ||
-          usage[:completion_tokens] || usage["output_tokens"] || usage[:output_tokens] || 0,
-      reasoning:
-        usage[:reasoning] || usage["reasoning"] || usage[:reasoning_tokens] ||
-          usage["reasoning_tokens"] || get_reasoning_tokens(usage) || 0,
-      cached_input: get_cached_input_tokens(usage, input, input_includes_cached),
-      cache_creation: get_cache_creation_tokens(usage, input, input_includes_cached),
+      output: output,
+      reasoning: reasoning,
+      cached_input: cached_input,
+      cache_creation: cache_creation,
       input_includes_cached: input_includes_cached,
-      add_reasoning_to_cost: get_add_reasoning_to_cost(usage)
+      add_reasoning_to_cost: get_add_reasoning_to_cost(usage),
+      tool_usage:
+        ReqLLM.Usage.Normalize.tool_usage(
+          Map.get(usage, :tool_usage) || Map.get(usage, "tool_usage")
+        ),
+      image_usage:
+        ReqLLM.Usage.Normalize.image_usage(
+          Map.get(usage, :image_usage) || Map.get(usage, "image_usage")
+        ),
+      input_tokens: input,
+      output_tokens: output,
+      total_tokens: total_tokens,
+      cached_tokens: cached_input,
+      cache_creation_tokens: cache_creation,
+      reasoning_tokens: reasoning
     }
+  end
+
+  defp safe_total_tokens(input, output) when is_number(input) and is_number(output) do
+    input + output
+  end
+
+  defp safe_total_tokens(_input, _output), do: nil
+
+  defp total_tokens_from_usage(usage, input, output) do
+    total =
+      usage[:total_tokens] || usage["total_tokens"] ||
+        usage[:totalTokenCount] || usage["totalTokenCount"]
+
+    case total do
+      value when is_number(value) -> value
+      _ -> safe_total_tokens(input, output)
+    end
+  end
+
+  defp maybe_put_total_tokens(map, input, output) do
+    case safe_total_tokens(input, output) do
+      nil -> map
+      total -> Map.put_new(map, :total_tokens, total)
+    end
   end
 
   defp detect_input_includes_cached(usage) do
@@ -285,11 +317,38 @@ defmodule ReqLLM.Step.Usage do
   end
 
   @spec compute_cost_breakdown(map(), LLMDB.Model.t()) ::
-          {:ok, %{input_cost: float(), output_cost: float(), total_cost: float()} | nil}
-  defp compute_cost_breakdown(_usage, %LLMDB.Model{cost: nil}), do: {:ok, nil}
+          {:ok,
+           %{
+             input_cost: float(),
+             output_cost: float(),
+             total_cost: float(),
+             cost: map()
+           }
+           | nil}
+  defp compute_cost_breakdown(usage, %LLMDB.Model{} = model) do
+    case ReqLLM.Billing.calculate(usage, model) do
+      {:ok, nil} ->
+        {:ok, nil}
 
-  defp compute_cost_breakdown(usage, %LLMDB.Model{cost: cost_map}) do
-    ReqLLM.Cost.calculate(usage, cost_map)
+      {:ok, cost} ->
+        {:ok,
+         %{
+           input_cost: cost.input_cost,
+           output_cost: cost.output_cost,
+           total_cost: cost.total,
+           cost: cost
+         }}
+    end
+  end
+
+  defp maybe_merge_cost(usage, nil), do: usage
+
+  defp maybe_merge_cost(usage, cost_breakdown) do
+    usage
+    |> Map.put(:cost, cost_breakdown.cost)
+    |> Map.put(:input_cost, cost_breakdown.input_cost)
+    |> Map.put(:output_cost, cost_breakdown.output_cost)
+    |> Map.put(:total_cost, cost_breakdown.total_cost)
   end
 
   # Safely clamps a value to a valid token count within bounds.

@@ -36,6 +36,22 @@ defmodule ReqLLM.StreamServer.MetadataTest do
       StreamServer.cancel(server)
     end
 
+    test "preserves total_tokens from usage metadata" do
+      server = start_server()
+      _task = mock_http_task(server)
+
+      usage = %{"prompt_tokens" => 10, "completion_tokens" => 5, "total_tokens" => 42}
+      payload = Jason.encode!(%{"usage" => usage})
+
+      StreamServer.http_event(server, {:data, "data: #{payload}\n\n"})
+      StreamServer.http_event(server, :done)
+
+      assert {:ok, metadata} = StreamServer.await_metadata(server, 100)
+      assert metadata.usage.total_tokens == 42
+
+      StreamServer.cancel(server)
+    end
+
     test "await_metadata blocks until completion" do
       server = start_server()
       _task = mock_http_task(server)

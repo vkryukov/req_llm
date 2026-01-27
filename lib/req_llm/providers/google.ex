@@ -559,14 +559,28 @@ defmodule ReqLLM.Providers.Google do
   end
 
   @impl ReqLLM.Provider
-  def extract_usage(body, _model) when is_map(body) do
+  def extract_usage(body, model) when is_map(body) do
     case body do
       %{"usageMetadata" => usage_metadata} ->
         usage = normalize_google_usage(usage_metadata)
+        tool_usage = google_tool_usage(body, model)
+        image_usage = google_image_usage(body)
+
+        usage =
+          usage
+          |> Map.put(:tool_usage, tool_usage)
+          |> maybe_put_image_usage(image_usage)
+
         {:ok, usage}
 
       _ ->
-        {:error, :no_usage_found}
+        image_usage = google_image_usage(body)
+
+        if map_size(image_usage) > 0 do
+          {:ok, %{image_usage: image_usage}}
+        else
+          {:error, :no_usage_found}
+        end
     end
   end
 
@@ -593,6 +607,88 @@ defmodule ReqLLM.Providers.Google do
       add_reasoning_to_cost: true
     }
   end
+
+  defp google_tool_usage(body, model) do
+    queries =
+      body
+      |> Map.get("candidates", [])
+      |> Enum.flat_map(fn candidate ->
+        case get_in(candidate, ["groundingMetadata", "webSearchQueries"]) do
+          queries when is_list(queries) -> queries
+          _ -> []
+        end
+      end)
+
+    if queries == [] do
+      %{}
+    else
+      unit = web_search_unit(model)
+
+      count =
+        case unit do
+          :query -> length(queries)
+          "query" -> length(queries)
+          _ -> 1
+        end
+
+      %{web_search: %{count: count, unit: unit || :call}}
+    end
+  end
+
+  defp google_image_usage(body) when is_map(body) do
+    candidates = Map.get(body, "candidates", [])
+
+    count =
+      Enum.reduce(candidates, 0, fn candidate, acc ->
+        parts = get_in(candidate, ["content", "parts"]) || []
+        acc + Enum.count(parts, &image_part?/1)
+      end)
+
+    if count > 0 do
+      %{generated: %{count: count}}
+    else
+      %{}
+    end
+  end
+
+  defp image_part?(%{"inlineData" => %{"mimeType" => mime}}) when is_binary(mime) do
+    String.starts_with?(mime, "image/")
+  end
+
+  defp image_part?(%{"inline_data" => %{"mime_type" => mime}}) when is_binary(mime) do
+    String.starts_with?(mime, "image/")
+  end
+
+  defp image_part?(%{"inlineData" => %{}}), do: true
+  defp image_part?(%{"inline_data" => %{}}), do: true
+  defp image_part?(_), do: false
+
+  defp maybe_put_image_usage(usage, image_usage) do
+    if map_size(image_usage) > 0 do
+      Map.put(usage, :image_usage, image_usage)
+    else
+      usage
+    end
+  end
+
+  defp web_search_unit(%LLMDB.Model{} = model) do
+    pricing = Map.get(model, :pricing) || Map.get(model, "pricing") || %{}
+    components = Map.get(pricing, :components) || Map.get(pricing, "components") || []
+
+    component =
+      Enum.find(components, fn entry ->
+        kind = Map.get(entry, :kind) || Map.get(entry, "kind")
+        tool = Map.get(entry, :tool) || Map.get(entry, "tool")
+        kind in [:tool, "tool"] and tool in [:web_search, "web_search"]
+      end)
+
+    case component do
+      nil -> nil
+      component -> Map.get(component, :unit) || Map.get(component, "unit")
+    end
+  end
+
+  defp web_search_unit(_), do: nil
 
   def pre_validate_options(_operation, model, opts) do
     {provider_opts, rest} = Keyword.pop(opts, :provider_options, [])
@@ -1054,15 +1150,14 @@ defmodule ReqLLM.Providers.Google do
             {req, %{resp | body: normalized}}
 
           :image when not is_streaming ->
-            model_name = req.options[:model]
+            model_name = normalize_model_id(req.options[:model], "google")
             body = ensure_parsed_body(resp.body)
             merged_response = decode_image_response(req, model_name, body)
             {req, %{resp | body: merged_response}}
 
           :object when not is_streaming ->
-            model_name = req.options[:model]
-            model = %LLMDB.Model{id: model_name, provider: :google}
-
+            model_name = normalize_model_id(req.options[:model], "google")
+            model = LLMDB.Model.new!(%{id: model_name, provider: :google})
             body = ensure_parsed_body(resp.body)
 
             openai_format = convert_google_json_mode_to_openai_format(body)
@@ -1070,7 +1165,6 @@ defmodule ReqLLM.Providers.Google do
             {:ok, response} =
               ReqLLM.Provider.Defaults.decode_response_body_openai_format(openai_format, model)
 
-            # Extract and set object from JSON text content (like OpenAI json_schema mode)
             response_with_object =
               case ReqLLM.Response.unwrap_object(response) do
                 {:ok, object} -> %{response | object: object}
@@ -1089,8 +1183,8 @@ defmodule ReqLLM.Providers.Google do
             ReqLLM.Provider.Defaults.default_decode_response({req, resp})
 
           _ ->
-            model_name = req.options[:model]
-            model = %LLMDB.Model{id: model_name, provider: :google}
+            model_name = normalize_model_id(req.options[:model], "google")
+            model = LLMDB.Model.new!(%{id: model_name, provider: :google})
 
             body = ensure_parsed_body(resp.body)
 
@@ -1114,7 +1208,11 @@ defmodule ReqLLM.Providers.Google do
                   %{
                     response_with_reasoning
                     | provider_meta:
-                        Map.put(response_with_reasoning.provider_meta, "google", grounding_data)
+                        Map.put(
+                          response_with_reasoning.provider_meta,
+                          "google",
+                          grounding_data
+                        )
                   }
               end
 
@@ -1360,7 +1458,8 @@ defmodule ReqLLM.Providers.Google do
     }
   end
 
-  defp convert_google_to_openai_format(body), do: body
+  defp convert_google_to_openai_format(body) when is_map(body), do: body
+  defp convert_google_to_openai_format(_body), do: %{}
 
   defp convert_google_json_mode_to_openai_format(%{"candidates" => candidates} = body) do
     choice =
@@ -1395,7 +1494,8 @@ defmodule ReqLLM.Providers.Google do
     }
   end
 
-  defp convert_google_json_mode_to_openai_format(body), do: body
+  defp convert_google_json_mode_to_openai_format(body) when is_map(body), do: body
+  defp convert_google_json_mode_to_openai_format(_body), do: %{}
 
   defp convert_google_parts_to_content(parts) do
     content_parts =
@@ -1480,6 +1580,10 @@ defmodule ReqLLM.Providers.Google do
   end
 
   defp attach_reasoning_details(response, _details), do: response
+
+  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(_, fallback), do: fallback
 
   defp normalize_google_finish_reason("STOP"), do: "stop"
   defp normalize_google_finish_reason("MAX_TOKENS"), do: "length"

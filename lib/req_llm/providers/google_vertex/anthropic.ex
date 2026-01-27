@@ -112,12 +112,8 @@ defmodule ReqLLM.Providers.GoogleVertex.Anthropic do
   def parse_response(body, %LLMDB.Model{} = vertex_model, opts) when is_map(body) do
     # Create an Anthropic model struct for decode_response
     # Use the model ID from the response body, or fall back to the Vertex model
-    model_id = Map.get(body, "model", vertex_model.id)
-
-    anthropic_model = %LLMDB.Model{
-      id: model_id,
-      provider: :anthropic
-    }
+    model_id = normalize_model_id(Map.get(body, "model") || vertex_model, "vertex-anthropic")
+    anthropic_model = LLMDB.Model.new!(%{id: model_id, provider: :anthropic})
 
     # Delegate to native Anthropic response decoding
     case Anthropic.Response.decode_response(body, anthropic_model) do
@@ -150,6 +146,10 @@ defmodule ReqLLM.Providers.GoogleVertex.Anthropic do
     # Delegate to native Anthropic extract_usage
     Anthropic.extract_usage(body, model)
   end
+
+  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(_, fallback), do: fallback
 
   # Translate reasoning_effort/reasoning_token_budget to Vertex additionalModelRequestFields
   # Only for Claude models that support extended thinking

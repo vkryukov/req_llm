@@ -912,8 +912,17 @@ defmodule ReqLLM.StreamServer do
           output: output,
           reasoning: reasoning,
           cached_input: cached_input,
-          cache_creation: cache_creation
+          cache_creation: cache_creation,
+          tool_usage:
+            ReqLLM.Usage.Normalize.tool_usage(
+              Map.get(usage, "tool_usage") || Map.get(usage, :tool_usage)
+            ),
+          image_usage:
+            ReqLLM.Usage.Normalize.image_usage(
+              Map.get(usage, "image_usage") || Map.get(usage, :image_usage)
+            )
         }
+        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
         |> add_token_aliases()
         |> add_cost_calculation_if_available(usage)
         |> calculate_cost_if_model_available(model)
@@ -928,8 +937,17 @@ defmodule ReqLLM.StreamServer do
           output: output,
           reasoning: reasoning,
           cached_input: cached_input,
-          cache_creation: cache_creation
+          cache_creation: cache_creation,
+          tool_usage:
+            ReqLLM.Usage.Normalize.tool_usage(
+              Map.get(usage, "tool_usage") || Map.get(usage, :tool_usage)
+            ),
+          image_usage:
+            ReqLLM.Usage.Normalize.image_usage(
+              Map.get(usage, "image_usage") || Map.get(usage, :image_usage)
+            )
         }
+        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
         |> add_token_aliases()
         |> add_cost_calculation_if_available(usage)
         |> calculate_cost_if_model_available(model)
@@ -948,8 +966,11 @@ defmodule ReqLLM.StreamServer do
           output: output,
           reasoning: reasoning,
           cached_input: cached_input,
-          cache_creation: cache_creation
+          cache_creation: cache_creation,
+          tool_usage: ReqLLM.Usage.Normalize.tool_usage(Map.get(usage, :tool_usage)),
+          image_usage: ReqLLM.Usage.Normalize.image_usage(Map.get(usage, :image_usage))
         }
+        |> maybe_put_total_tokens(total_tokens_from_usage(usage))
         |> add_token_aliases()
         |> add_cost_calculation_if_available(usage)
         |> calculate_cost_if_model_available(model)
@@ -969,10 +990,6 @@ defmodule ReqLLM.StreamServer do
   end
 
   defp cached_from_usage(usage) do
-    # Anthropic/Azure/Vertex format
-    # AWS Bedrock formats (camelCase)
-    # OpenAI formats (nested)
-    # Legacy
     Map.get(usage, "cache_read_input_tokens") ||
       Map.get(usage, "cacheReadInputTokens") ||
       Map.get(usage, "cacheReadInputTokenCount") ||
@@ -982,9 +999,6 @@ defmodule ReqLLM.StreamServer do
   end
 
   defp cache_creation_from_usage(usage) do
-    # Anthropic/Azure/Vertex format
-    # AWS Bedrock formats (camelCase)
-    # Fallback
     Map.get(usage, "cache_creation_input_tokens") ||
       Map.get(usage, "cacheWriteInputTokens") ||
       Map.get(usage, "cacheWriteInputTokenCount") ||
@@ -995,12 +1009,28 @@ defmodule ReqLLM.StreamServer do
     usage
     |> Map.put(:input_tokens, usage.input)
     |> Map.put(:output_tokens, usage.output)
-    |> Map.put(:total_tokens, usage.input + usage.output)
+    |> maybe_put_total_tokens(safe_total_tokens(usage.input, usage.output))
+    |> Map.put(:cached_tokens, usage.cached_input)
+    |> Map.put(:cache_creation_tokens, usage.cache_creation)
+  end
+
+  defp safe_total_tokens(input, output) when is_number(input) and is_number(output) do
+    input + output
+  end
+
+  defp safe_total_tokens(_input, _output), do: nil
+
+  defp maybe_put_total_tokens(map, total) when is_number(total) do
+    Map.put_new(map, :total_tokens, total)
+  end
+
+  defp maybe_put_total_tokens(map, _total), do: map
+
+  defp total_tokens_from_usage(usage) do
+    Map.get(usage, "total_tokens") || Map.get(usage, :total_tokens)
   end
 
   defp add_cost_calculation_if_available(normalized_usage, original_usage) do
-    # If the original usage had cost information, preserve it
-    # This might come from providers that calculate costs themselves
     case original_usage do
       %{total_cost: cost} when is_number(cost) ->
         Map.put(normalized_usage, :total_cost, cost)
@@ -1013,9 +1043,18 @@ defmodule ReqLLM.StreamServer do
     end
   end
 
-  defp calculate_cost_if_model_available(usage, %LLMDB.Model{cost: cost_map})
-       when is_map(cost_map) do
-    ReqLLM.Cost.add_cost_to_usage(usage, cost_map)
+  defp calculate_cost_if_model_available(usage, %LLMDB.Model{} = model) do
+    case ReqLLM.Billing.calculate(usage, model) do
+      {:ok, nil} ->
+        usage
+
+      {:ok, cost} ->
+        usage
+        |> Map.put(:cost, cost)
+        |> Map.put_new(:total_cost, cost.total)
+        |> Map.put(:input_cost, cost.input_cost)
+        |> Map.put(:output_cost, cost.output_cost)
+    end
   end
 
   defp calculate_cost_if_model_available(usage, _), do: usage

@@ -310,12 +310,32 @@ defmodule ReqLLM.Providers.Anthropic do
   @impl ReqLLM.Provider
   def extract_usage(body, _model) when is_map(body) do
     case body do
-      %{"usage" => usage} -> {:ok, usage}
-      _ -> {:error, :no_usage_found}
+      %{"usage" => usage} ->
+        usage = maybe_add_anthropic_tool_usage(usage)
+        {:ok, usage}
+
+      _ ->
+        {:error, :no_usage_found}
     end
   end
 
   def extract_usage(_, _), do: {:error, :invalid_body}
+
+  defp maybe_add_anthropic_tool_usage(usage) when is_map(usage) do
+    server_tool_use = Map.get(usage, "server_tool_use") || Map.get(usage, :server_tool_use) || %{}
+
+    web_search =
+      Map.get(server_tool_use, "web_search_requests") ||
+        Map.get(server_tool_use, :web_search_requests)
+
+    if is_number(web_search) and web_search > 0 do
+      Map.put(usage, :tool_usage, %{web_search: %{count: web_search, unit: :call}})
+    else
+      usage
+    end
+  end
+
+  defp maybe_add_anthropic_tool_usage(usage), do: usage
 
   # ========================================================================
   # Shared Request Building Helpers (used by both Req and Finch paths)

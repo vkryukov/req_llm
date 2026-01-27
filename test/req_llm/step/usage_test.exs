@@ -113,6 +113,36 @@ defmodule ReqLLM.Step.UsageTest do
       end
     end
 
+    test "preserves total_tokens when provided in usage" do
+      model = %LLMDB.Model{provider: :test, id: "test-model"}
+      request = mock_request(model: model)
+
+      response =
+        mock_response(%{
+          "usage" => %{"prompt_tokens" => 10, "completion_tokens" => 20, "total_tokens" => 50}
+        })
+
+      {_req, updated_resp} = Usage.handle({request, response})
+
+      usage_data = updated_resp.private[:req_llm][:usage]
+      assert usage_data.tokens.total_tokens == 50
+    end
+
+    test "preserves totalTokenCount when provided in usage" do
+      model = %LLMDB.Model{provider: :test, id: "test-model"}
+      request = mock_request(model: model)
+
+      response =
+        mock_response(%{
+          "usage" => %{"input_tokens" => 5, "output_tokens" => 7, "totalTokenCount" => 20}
+        })
+
+      {_req, updated_resp} = Usage.handle({request, response})
+
+      usage_data = updated_resp.private[:req_llm][:usage]
+      assert usage_data.tokens.total_tokens == 20
+    end
+
     test "emits telemetry and calculates cost" do
       model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
       request = mock_request(model: model)
@@ -144,6 +174,48 @@ defmodule ReqLLM.Step.UsageTest do
       assert updated_resp.private[:req_llm][:other_data] == "preserved"
       assert updated_resp.private[:other_key] == "also_preserved"
       assert updated_resp.private[:req_llm][:usage] != nil
+    end
+
+    test "uses provider module from private model when options model is string" do
+      model = %LLMDB.Model{
+        provider: :google,
+        id: "gemini-2.5-flash",
+        pricing: %{
+          components: [
+            %{
+              id: "tool.web_search",
+              kind: "tool",
+              tool: "web_search",
+              unit: "call",
+              per: 1000,
+              rate: 35.0
+            }
+          ]
+        }
+      }
+
+      request = mock_request([model: model.id], %{req_llm_model: model})
+
+      response =
+        mock_response(%{
+          "usageMetadata" => %{
+            "promptTokenCount" => 10,
+            "candidatesTokenCount" => 5,
+            "totalTokenCount" => 15
+          },
+          "candidates" => [
+            %{
+              "groundingMetadata" => %{
+                "webSearchQueries" => ["query"]
+              }
+            }
+          ]
+        })
+
+      {_req, updated_resp} = Usage.handle({request, response})
+
+      usage_data = updated_resp.private[:req_llm][:usage]
+      assert usage_data.tokens.tool_usage.web_search.count == 1
     end
   end
 
@@ -200,6 +272,45 @@ defmodule ReqLLM.Step.UsageTest do
       cost_str = Float.to_string(usage_data.cost)
       decimal_places = String.split(cost_str, ".") |> List.last() |> String.length()
       assert decimal_places <= 6
+    end
+
+    test "calculates tool usage cost with pricing components" do
+      model = %LLMDB.Model{
+        provider: :test,
+        id: "test-model",
+        pricing: %{
+          components: [
+            %{id: "token.input", kind: "token", per: 1_000_000, rate: 1.0},
+            %{id: "token.output", kind: "token", per: 1_000_000, rate: 2.0},
+            %{
+              id: "tool.web_search",
+              kind: "tool",
+              tool: "web_search",
+              unit: "query",
+              per: 1,
+              rate: 0.5
+            }
+          ]
+        }
+      }
+
+      request = mock_request(model: model)
+
+      response =
+        mock_response(%{
+          "usage" => %{
+            "prompt_tokens" => 1_000_000,
+            "completion_tokens" => 0,
+            "tool_usage" => %{"web_search" => %{"count" => 2, "unit" => "query"}}
+          }
+        })
+
+      {_req, updated_resp} = Usage.handle({request, response})
+
+      usage_data = updated_resp.private[:req_llm][:usage]
+      assert usage_data.cost == 2.0
+      assert usage_data.input_cost == 1.0
+      assert usage_data.output_cost == 0.0
     end
   end
 

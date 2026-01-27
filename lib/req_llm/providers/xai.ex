@@ -278,6 +278,7 @@ defmodule ReqLLM.Providers.XAI do
     case body do
       %{"usage" => usage} ->
         normalized_usage = Map.put_new(usage, "cached_tokens", 0)
+        normalized_usage = maybe_add_xai_tool_usage(normalized_usage)
         {:ok, normalized_usage}
 
       _ ->
@@ -286,6 +287,16 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   def extract_usage(_, _), do: {:error, :invalid_body}
+
+  defp maybe_add_xai_tool_usage(usage) when is_map(usage) do
+    sources = Map.get(usage, "num_sources_used") || Map.get(usage, :num_sources_used)
+
+    if is_number(sources) and sources > 0 do
+      Map.put(usage, :tool_usage, %{web_search: %{count: sources, unit: :source}})
+    else
+      usage
+    end
+  end
 
   @doc """
   Check if a model supports native structured outputs via response_format with json_schema.
@@ -619,8 +630,8 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   defp decode_chat_response(req, resp, operation) do
-    model_name = req.options[:model]
-    model = %LLMDB.Model{id: model_name, provider: :xai}
+    model_name = normalize_model_id(req.options[:model], "xai")
+    model = LLMDB.Model.new!(%{id: model_name, provider: :xai})
     is_streaming = req.options[:stream] == true
 
     if is_streaming do
@@ -659,19 +670,32 @@ defmodule ReqLLM.Providers.XAI do
 
   defp decode_non_streaming_response(req, resp, model, operation) do
     body = ensure_parsed_body(resp.body)
-    {:ok, response} = ReqLLM.Provider.Defaults.decode_response_body_openai_format(body, model)
 
-    final_response =
-      case operation do
-        :object ->
-          extract_and_set_object(response)
+    case body do
+      body when is_map(body) ->
+        {:ok, response} = ReqLLM.Provider.Defaults.decode_response_body_openai_format(body, model)
 
-        _ ->
-          response
-      end
+        final_response =
+          case operation do
+            :object ->
+              extract_and_set_object(response)
 
-    merged_response = merge_response_with_context(req, final_response)
-    {req, %{resp | body: merged_response}}
+            _ ->
+              response
+          end
+
+        merged_response = merge_response_with_context(req, final_response)
+        {req, %{resp | body: merged_response}}
+
+      _ ->
+        error =
+          ReqLLM.Error.API.Response.exception(
+            reason: "xAI response decode error: invalid body",
+            response_body: body
+          )
+
+        {req, error}
+    end
   end
 
   defp extract_and_set_object(response) do
@@ -715,6 +739,10 @@ defmodule ReqLLM.Providers.XAI do
     context = req.options[:context] || %ReqLLM.Context{messages: []}
     ReqLLM.Context.merge_response(context, response)
   end
+
+  defp normalize_model_id(%LLMDB.Model{id: id}, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(id, _fallback) when is_binary(id), do: id
+  defp normalize_model_id(_, fallback), do: fallback
 
   @spec sanitize_schema_for_xai(map()) ::
           {:ok, map()} | {:error, ReqLLM.Error.t()}

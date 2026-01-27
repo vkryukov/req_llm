@@ -121,21 +121,8 @@ defmodule ReqLLM.Providers.GoogleVertex.Gemini do
 
   Gemini responses include usageMetadata with token counts including cached tokens.
   """
-  def extract_usage(body, _model) do
-    case body do
-      %{"usageMetadata" => usage} ->
-        {:ok,
-         %{
-           input_tokens: Map.get(usage, "promptTokenCount", 0),
-           output_tokens: Map.get(usage, "candidatesTokenCount", 0),
-           reasoning_tokens: Map.get(usage, "thoughtsTokenCount"),
-           cached_tokens: Map.get(usage, "cachedContentTokenCount"),
-           add_reasoning_to_cost: true
-         }}
-
-      _ ->
-        {:error, :no_usage_data}
-    end
+  def extract_usage(body, model) do
+    Google.extract_usage(body, model)
   end
 
   @doc """

@@ -642,6 +642,129 @@ defmodule ReqLLM.Providers.GoogleTest do
       assert usage.total_tokens == 30
       assert usage.cached_tokens == 0
     end
+
+    test "extract_usage includes image usage when inline data is present" do
+      model = %LLMDB.Model{provider: :google, id: "gemini-2.5-flash-image"}
+
+      body_with_image = %{
+        "candidates" => [
+          %{
+            "content" => %{
+              "parts" => [
+                %{
+                  "inlineData" => %{
+                    "mimeType" => "image/png",
+                    "data" => "AAA"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+
+      {:ok, usage} = Google.extract_usage(body_with_image, model)
+      assert usage.image_usage.generated.count == 1
+    end
+
+    test "extract_usage counts web searches when pricing unit is query" do
+      model = %LLMDB.Model{
+        id: "gemini-query-billed",
+        provider: :google,
+        pricing: %{
+          components: [
+            %{
+              id: "tool.web_search",
+              kind: "tool",
+              tool: "web_search",
+              unit: "query",
+              per: 1000,
+              rate: 14.0
+            }
+          ]
+        }
+      }
+
+      body = %{
+        "usageMetadata" => %{
+          "promptTokenCount" => 10,
+          "candidatesTokenCount" => 20,
+          "totalTokenCount" => 30
+        },
+        "candidates" => [
+          %{
+            "groundingMetadata" => %{
+              "webSearchQueries" => ["q1", "q2"]
+            }
+          }
+        ]
+      }
+
+      {:ok, usage} = Google.extract_usage(body, model)
+      assert usage[:tool_usage][:web_search][:count] == 2
+      assert usage[:tool_usage][:web_search][:unit] == "query"
+    end
+
+    test "extract_usage defaults web search count to 1 when pricing unit is not query" do
+      model = %LLMDB.Model{
+        id: "gemini-2.5-flash",
+        provider: :google,
+        pricing: %{
+          components: [
+            %{
+              id: "tool.web_search",
+              kind: "tool",
+              tool: "web_search",
+              unit: "call",
+              per: 1000,
+              rate: 35.0
+            }
+          ]
+        }
+      }
+
+      body = %{
+        "usageMetadata" => %{
+          "promptTokenCount" => 10,
+          "candidatesTokenCount" => 20,
+          "totalTokenCount" => 30
+        },
+        "candidates" => [
+          %{
+            "groundingMetadata" => %{
+              "webSearchQueries" => ["q1", "q2"]
+            }
+          }
+        ]
+      }
+
+      {:ok, usage} = Google.extract_usage(body, model)
+      assert usage[:tool_usage][:web_search][:count] == 1
+      assert usage[:tool_usage][:web_search][:unit] == "call"
+    end
+
+    test "extract_usage handles missing web search pricing component" do
+      model = %LLMDB.Model{id: "gemini-no-pricing", provider: :google, pricing: nil}
+
+      body = %{
+        "usageMetadata" => %{
+          "promptTokenCount" => 10,
+          "candidatesTokenCount" => 20,
+          "totalTokenCount" => 30
+        },
+        "candidates" => [
+          %{
+            "groundingMetadata" => %{
+              "webSearchQueries" => ["q1", "q2"]
+            }
+          }
+        ]
+      }
+
+      {:ok, usage} = Google.extract_usage(body, model)
+      assert usage[:tool_usage][:web_search][:count] == 1
+      assert usage[:tool_usage][:web_search][:unit] == :call
+    end
   end
 
   describe "object generation with native JSON mode" do

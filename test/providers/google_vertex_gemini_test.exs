@@ -358,4 +358,22 @@ defmodule ReqLLM.Providers.GoogleVertex.GeminiTest do
       assert response.message.reasoning_details == nil
     end
   end
+
+  describe "extract_usage/2" do
+    test "maps cachedContentTokenCount to cached_tokens" do
+      body = %{
+        "usageMetadata" => %{
+          "promptTokenCount" => 100,
+          "candidatesTokenCount" => 20,
+          "totalTokenCount" => 120,
+          "cachedContentTokenCount" => 50
+        }
+      }
+
+      model = %LLMDB.Model{id: "gemini-2.5-flash", provider: :google_vertex}
+
+      assert {:ok, usage} = ReqLLM.Providers.GoogleVertex.Gemini.extract_usage(body, model)
+      assert usage[:cached_tokens] == 50
+    end
+  end
 end
