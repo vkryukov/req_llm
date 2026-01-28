@@ -3,7 +3,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.STS do
   AWS Security Token Service (STS) integration for AssumeRole.
 
   Provides temporary credentials via AssumeRole without requiring ex_aws.
-  Uses built-in :xmerl for XML parsing and existing ex_aws_auth for signing.
+  Uses lightweight tag extraction for XML parsing and existing ex_aws_auth for signing.
 
   ## Usage
 
@@ -186,14 +186,10 @@ defmodule ReqLLM.Providers.AmazonBedrock.STS do
       {:ok, creds} = STS.parse_credentials(xml)
   """
   def parse_credentials(xml_body) when is_binary(xml_body) do
-    # Parse XML
-    {doc, _} = :xmerl_scan.string(String.to_charlist(xml_body))
-
-    # Extract credential fields using XPath
-    access_key_id = extract_text(doc, ~c"//AccessKeyId")
-    secret_access_key = extract_text(doc, ~c"//SecretAccessKey")
-    session_token = extract_text(doc, ~c"//SessionToken")
-    expiration = extract_text(doc, ~c"//Expiration")
+    access_key_id = extract_text(xml_body, "AccessKeyId")
+    secret_access_key = extract_text(xml_body, "SecretAccessKey")
+    session_token = extract_text(xml_body, "SessionToken")
+    expiration = extract_text(xml_body, "Expiration")
 
     if access_key_id && secret_access_key && session_token do
       {:ok,
@@ -210,19 +206,26 @@ defmodule ReqLLM.Providers.AmazonBedrock.STS do
     e -> {:error, {:xml_parse_error, e}}
   end
 
-  # Extract text content from XML element using XPath
-  defp extract_text(doc, xpath) do
-    case :xmerl_xpath.string(xpath, doc) do
-      [element | _] ->
-        case :xmerl_xpath.string(~c"text()", element) do
-          [{:xmlText, _, _, _, text, _} | _] ->
-            List.to_string(text)
+  # Extract text content from XML element by tag matching
+  defp extract_text(xml_body, tag) do
+    open_tag = "<#{tag}>"
+    close_tag = "</#{tag}>"
 
-          [] ->
+    case :binary.match(xml_body, open_tag) do
+      {start, _} ->
+        start = start + byte_size(open_tag)
+
+        case :binary.match(xml_body, close_tag, [{:scope, {start, byte_size(xml_body) - start}}]) do
+          {finish, _} ->
+            xml_body
+            |> binary_part(start, finish - start)
+            |> String.trim()
+
+          :nomatch ->
             nil
         end
 
-      [] ->
+      :nomatch ->
         nil
     end
   end
