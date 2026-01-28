@@ -1043,13 +1043,24 @@ defmodule ReqLLM.Provider.Defaults do
 
     cached_tokens = get_in(usage, ["prompt_tokens_details", "cached_tokens"]) || 0
 
-    %{
+    base = %{
       input_tokens: input,
       output_tokens: output,
       total_tokens: total,
       cached_tokens: cached_tokens,
       reasoning_tokens: reasoning_tokens
     }
+
+    extra =
+      Map.drop(usage, [
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_tokens_details",
+        "completion_tokens_details"
+      ])
+
+    Map.merge(base, extra)
   end
 
   defp parse_openai_usage(_, _choices),

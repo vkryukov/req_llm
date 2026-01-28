@@ -51,7 +51,7 @@ defmodule ReqLLM.Usage.Normalize do
       cache_creation: cache_creation,
       input_includes_cached: input_includes_cached,
       add_reasoning_to_cost: get_add_reasoning_to_cost(usage),
-      tool_usage: tool_usage(MapAccess.get(usage, :tool_usage)),
+      tool_usage: resolve_tool_usage(usage),
       image_usage: image_usage(MapAccess.get(usage, :image_usage)),
       input_tokens: input,
       output_tokens: output,
@@ -114,6 +114,38 @@ defmodule ReqLLM.Usage.Normalize do
     MapAccess.get(usage, :add_reasoning_to_cost) ||
       MapAccess.get(usage, "add_reasoning_to_cost") ||
       is_google_gemini_format(usage)
+  end
+
+  defp resolve_tool_usage(usage) do
+    existing =
+      MapAccess.get(usage, :tool_usage) || MapAccess.get(usage, "tool_usage") || %{}
+
+    normalized = Tool.normalize(existing)
+
+    if map_size(normalized) > 0 do
+      normalized
+    else
+      server_tool_use =
+        MapAccess.get(usage, :server_tool_use) || MapAccess.get(usage, "server_tool_use") || %{}
+
+      web_search =
+        MapAccess.get(server_tool_use, :web_search_requests) ||
+          MapAccess.get(server_tool_use, "web_search_requests")
+
+      if is_number(web_search) and web_search > 0 do
+        ReqLLM.Usage.Tool.build(:web_search, web_search)
+      else
+        sources =
+          MapAccess.get(usage, :num_sources_used) ||
+            MapAccess.get(usage, "num_sources_used")
+
+        if is_number(sources) and sources > 0 do
+          ReqLLM.Usage.Tool.build(:web_search, sources, :source)
+        else
+          %{}
+        end
+      end
+    end
   end
 
   defp is_google_gemini_format(usage) do

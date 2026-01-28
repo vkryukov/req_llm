@@ -282,8 +282,9 @@ defmodule ReqLLM.Providers.Anthropic.Response do
     cache_read = Map.get(usage, "cache_read_input_tokens", 0)
     cache_creation = Map.get(usage, "cache_creation_input_tokens", 0)
     reasoning_tokens = Map.get(usage, "reasoning_output_tokens", 0)
+    tool_usage = anthropic_tool_usage(usage)
 
-    %{
+    base = %{
       input_tokens: input,
       output_tokens: output,
       total_tokens: input + output,
@@ -292,6 +293,12 @@ defmodule ReqLLM.Providers.Anthropic.Response do
       cache_creation_input_tokens: cache_creation,
       reasoning_tokens: reasoning_tokens
     }
+
+    if map_size(tool_usage) > 0 do
+      Map.put(base, :tool_usage, tool_usage)
+    else
+      base
+    end
   end
 
   defp parse_usage(_),
@@ -302,6 +309,22 @@ defmodule ReqLLM.Providers.Anthropic.Response do
       cached_tokens: 0,
       reasoning_tokens: 0
     }
+
+  defp anthropic_tool_usage(usage) when is_map(usage) do
+    server_tool_use = Map.get(usage, "server_tool_use") || Map.get(usage, :server_tool_use) || %{}
+
+    web_search =
+      Map.get(server_tool_use, "web_search_requests") ||
+        Map.get(server_tool_use, :web_search_requests)
+
+    if is_number(web_search) and web_search > 0 do
+      ReqLLM.Usage.Tool.build(:web_search, web_search)
+    else
+      %{}
+    end
+  end
+
+  defp anthropic_tool_usage(_), do: %{}
 
   defp parse_finish_reason("stop"), do: :stop
   defp parse_finish_reason("max_tokens"), do: :length

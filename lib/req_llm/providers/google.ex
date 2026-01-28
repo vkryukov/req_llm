@@ -1163,18 +1163,23 @@ defmodule ReqLLM.Providers.Google do
               ReqLLM.Provider.Defaults.decode_response_body_openai_format(openai_format, model)
 
             response_with_reasoning = attach_reasoning_details(response, reasoning_details)
+            tool_usage = google_tool_usage(body, model)
+            image_usage = google_image_usage(body)
+
+            response_with_usage =
+              add_usage_details(response_with_reasoning, tool_usage, image_usage)
 
             response_with_grounding =
               case grounding_metadata do
                 nil ->
-                  response_with_reasoning
+                  response_with_usage
 
                 grounding_data ->
                   %{
-                    response_with_reasoning
+                    response_with_usage
                     | provider_meta:
                         Map.put(
-                          response_with_reasoning.provider_meta,
+                          response_with_usage.provider_meta,
                           "google",
                           grounding_data
                         )
@@ -1215,8 +1220,12 @@ defmodule ReqLLM.Providers.Google do
     usage =
       case Map.get(body, "usageMetadata") do
         usage_metadata when is_map(usage_metadata) -> normalize_google_usage(usage_metadata)
-        _ -> nil
+        _ -> %{}
       end
+
+    image_usage = google_image_usage(body)
+    usage = maybe_put_image_usage(usage, image_usage)
+    usage = if usage != %{}, do: usage
 
     base_response = %ReqLLM.Response{
       id: image_response_id(),
@@ -1272,6 +1281,25 @@ defmodule ReqLLM.Providers.Google do
 
   defp image_response_id do
     "img_" <> (:crypto.strong_rand_bytes(12) |> Base.url_encode64(padding: false))
+  end
+
+  defp add_usage_details(%ReqLLM.Response{} = response, tool_usage, image_usage) do
+    usage = response.usage || %{}
+
+    usage =
+      if map_size(tool_usage) > 0 do
+        Map.put(usage, :tool_usage, tool_usage)
+      else
+        usage
+      end
+
+    usage = maybe_put_image_usage(usage, image_usage)
+
+    if usage == %{} and response.usage == nil do
+      response
+    else
+      %{response | usage: usage}
+    end
   end
 
   # Helper to build Google toolConfig from OpenAI-style tool_choice

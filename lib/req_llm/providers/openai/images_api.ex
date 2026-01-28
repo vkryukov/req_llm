@@ -83,6 +83,13 @@ defmodule ReqLLM.Providers.OpenAI.ImagesAPI do
       |> Enum.reject(&is_nil/1)
 
     message = %Message{role: :assistant, content: parts}
+    size_class = openai_image_size_class(req.options[:size], req.options[:quality])
+    image_usage = ReqLLM.Usage.Image.build_generated(length(parts), size_class)
+
+    usage =
+      if map_size(image_usage) > 0 do
+        %{image_usage: image_usage}
+      end
 
     base_response = %Response{
       id: image_response_id(),
@@ -92,7 +99,7 @@ defmodule ReqLLM.Providers.OpenAI.ImagesAPI do
       object: nil,
       stream?: false,
       stream: nil,
-      usage: nil,
+      usage: usage,
       finish_reason: :stop,
       provider_meta: %{"openai" => Map.delete(body, "data")},
       error: nil
@@ -177,6 +184,49 @@ defmodule ReqLLM.Providers.OpenAI.ImagesAPI do
     do: Map.put(body, "output_format", other)
 
   defp maybe_put_output_format(body, _), do: body
+
+  defp openai_image_size_class(size, quality) do
+    size_value = normalize_image_size(size)
+    quality_value = normalize_image_quality(quality)
+
+    if size_value && quality_value do
+      "#{size_value}:#{quality_value}"
+    end
+  end
+
+  defp normalize_image_size(nil), do: "1024x1024"
+  defp normalize_image_size("auto"), do: "1024x1024"
+
+  defp normalize_image_size({w, h}) when is_integer(w) and is_integer(h) do
+    "#{w}x#{h}"
+  end
+
+  defp normalize_image_size(size) when is_binary(size) do
+    size
+    |> String.trim()
+    |> String.downcase()
+  end
+
+  defp normalize_image_size(_), do: "1024x1024"
+
+  defp normalize_image_quality(nil), do: "medium"
+
+  defp normalize_image_quality(quality) when is_atom(quality) do
+    quality |> Atom.to_string() |> normalize_image_quality()
+  end
+
+  defp normalize_image_quality(quality) when is_binary(quality) do
+    case String.downcase(quality) do
+      "low" -> "low"
+      "medium" -> "medium"
+      "standard" -> "medium"
+      "high" -> "high"
+      "hd" -> "high"
+      _ -> "medium"
+    end
+  end
+
+  defp normalize_image_quality(_), do: "medium"
 
   defp image_response_id do
     "img_" <> (:crypto.strong_rand_bytes(12) |> Base.url_encode64(padding: false))
