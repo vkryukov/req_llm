@@ -42,6 +42,8 @@ defmodule ReqLLM.MixProject do
           "guides/configuration.md",
           "guides/core-concepts.md",
           "guides/data-structures.md",
+          "guides/usage-and-billing.md",
+          "guides/image-generation.md",
           "guides/model-metadata.md",
           "guides/mix-tasks.md",
           "guides/fixture-testing.md",
@@ -68,6 +70,8 @@ defmodule ReqLLM.MixProject do
             "guides/configuration.md",
             "guides/core-concepts.md",
             "guides/data-structures.md",
+            "guides/usage-and-billing.md",
+            "guides/image-generation.md",
             "guides/model-metadata.md"
           ],
           "Development & Testing": [
