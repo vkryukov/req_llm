@@ -14,6 +14,7 @@ mix run lib/examples/demo.exs
 
 - **`agent.ex`** - A GenServer-based AI agent with streaming and tool calling
 - **`demo.exs`** - Interactive demonstration of agent capabilities
+- **`scripts/`** - Standalone runnable scripts for all API methods (see [scripts/README.md](scripts/README.md))
 
 ## Features Demonstrated
 

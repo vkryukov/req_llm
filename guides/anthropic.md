@@ -144,6 +144,28 @@ Passed via `:provider_options` keyword:
 > Domain filters cannot expand beyond organization-level restrictions. Claude automatically decides
 > when to use web search and cites sources in its responses.
 
+#### Web Search Cost Tracking
+
+Web search usage and costs are tracked in `response.usage`:
+
+```elixir
+{:ok, response} = ReqLLM.generate_text(
+  "anthropic:claude-sonnet-4-5",
+  "What are the latest AI announcements?",
+  provider_options: [web_search: %{max_uses: 5}]
+)
+
+# Access web search usage
+response.usage.tool_usage.web_search
+#=> %{count: 2, unit: "call"}
+
+# Access cost breakdown
+response.usage.cost
+#=> %{tokens: 0.001, tools: 0.02, images: 0.0, total: 0.021}
+```
+
+Web search is billed at **$10 per 1,000 searches** plus standard token costs.
+
 ## Wire Format Notes
 
 - Endpoint: `/v1/messages`

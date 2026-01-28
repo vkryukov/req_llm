@@ -182,9 +182,31 @@ response.usage
 #   }
 ```
 
+### Tool & Image Usage
+
+When using web search or generating images, additional usage metadata is available:
+
+```elixir
+# Web search usage (Anthropic, OpenAI, xAI, Google)
+{:ok, response} = ReqLLM.generate_text(model, prompt,
+  provider_options: [web_search: %{max_uses: 5}])
+
+response.usage.tool_usage
+#=> %{web_search: %{count: 2, unit: "call"}}
+
+response.usage.cost
+#=> %{tokens: 0.001, tools: 0.02, images: 0.0, total: 0.021}
+
+# Image generation usage
+{:ok, response} = ReqLLM.generate_image("openai:gpt-image-1", prompt)
+
+response.usage.image_usage
+#=> %{generated: %{count: 1, size_class: "1024x1024"}}
+```
+
 A telemetry event `[:req_llm, :token_usage]` is published on every request with token counts and calculated costs.
 
-See `lib/examples/scripts/usage_cost_search_image.exs` for a multi-provider smoke test that validates search tool and image generation cost metadata.
+See `lib/examples/scripts/usage_cost_search_image.exs` for a multi-provider smoke test that validates search tool and image generation cost metadata. For comprehensive documentation, see the [Usage & Billing Guide](guides/usage-and-billing.md).
 
 ## Streaming Configuration
 
@@ -307,6 +329,8 @@ This approach gives you full control over the Req pipeline, allowing you to add 
 - [Configuration](guides/configuration.md) – timeouts, connection pools, and global settings
 - [Core Concepts](guides/core-concepts.md) – architecture & data model
 - [Data Structures](guides/data-structures.md) – detailed type information
+- [Usage & Billing](guides/usage-and-billing.md) – token costs, tool usage, image costs
+- [Image Generation](guides/image-generation.md) – generating images with OpenAI and Google
 - [Mix Tasks](guides/mix-tasks.md) – model sync, compatibility testing, code generation
 - [Fixture Testing](guides/fixture-testing.md) – model validation and supported models
 - [Adding a Provider](guides/adding_a_provider.md) – extend with new providers

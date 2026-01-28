@@ -118,6 +118,42 @@ OpenAI provides comprehensive usage data including:
 - `cached_tokens` - Cached input tokens
 - Standard input/output/total tokens and costs
 
+### Web Search (Responses API)
+
+Models using the Responses API (o1, o3, gpt-5) support web search tools:
+
+```elixir
+{:ok, response} = ReqLLM.generate_text(
+  "openai:gpt-5-mini",
+  "What are the latest AI announcements?",
+  tools: [%{"type" => "web_search"}]
+)
+
+# Access web search usage
+response.usage.tool_usage.web_search
+#=> %{count: 2, unit: "call"}
+
+# Access cost breakdown
+response.usage.cost
+#=> %{tokens: 0.002, tools: 0.02, images: 0.0, total: 0.022}
+```
+
+### Image Generation
+
+Image generation costs are tracked separately:
+
+```elixir
+{:ok, response} = ReqLLM.generate_image("openai:gpt-image-1", prompt)
+
+response.usage.image_usage
+#=> %{generated: %{count: 1, size_class: "1024x1024"}}
+
+response.usage.cost
+#=> %{tokens: 0.0, tools: 0.0, images: 0.04, total: 0.04}
+```
+
+See the [Image Generation Guide](image-generation.md) for more details.
+
 ## Resources
 
 - [OpenAI API Documentation](https://platform.openai.com/docs/api-reference)

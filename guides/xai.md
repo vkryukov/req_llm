@@ -21,6 +21,7 @@ Passed via `:provider_options` keyword:
 ### `xai_tools`
 - **Type**: List of maps
 - **Purpose**: Enable agent tools such as web search
+- **Supported tools**: `web_search`, `x_search`
 - **Example**:
   ```elixir
   provider_options: [
@@ -34,6 +35,7 @@ Passed via `:provider_options` keyword:
   - `excluded_domains` - Block list of domains
   - `enable_image_understanding` - Enable image understanding during search
 - **Note**: `search_parameters` is deprecated and will be removed in a future release
+- **Note**: `live_search` is no longer supported by xAI and will be filtered out
 
 ### `parallel_tool_calls`
 
@@ -97,6 +99,28 @@ xAI's native structured outputs have limitations (auto-sanitized by ReqLLM):
 **Supported:**
 - `anyOf`
 - `additionalProperties: false` (enforced on root)
+
+## Web Search Cost Tracking
+
+Web search usage and costs are tracked in `response.usage`:
+
+```elixir
+{:ok, response} = ReqLLM.generate_text(
+  "xai:grok-4-1-fast-reasoning",
+  "What are the latest news about AI?",
+  xai_tools: [%{type: "web_search"}]
+)
+
+# Access web search usage
+response.usage.tool_usage.web_search
+#=> %{count: 3, unit: "call"}
+
+# Access cost breakdown
+response.usage.cost
+#=> %{tokens: 0.002, tools: 0.03, images: 0.0, total: 0.032}
+```
+
+xAI may report usage in different units (`"call"` or `"source"`) depending on the response format.
 
 ## Resources
 

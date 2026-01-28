@@ -226,6 +226,48 @@ text = ReqLLM.Response.text(response)
 usage = ReqLLM.Response.usage(response)
 ```
 
+### Usage Structure
+
+The `usage` field contains normalized usage data with token counts, costs, and tool/image usage:
+
+```elixir
+%{
+  # Token counts
+  input_tokens: 150,
+  output_tokens: 200,
+  total_tokens: 350,
+  reasoning_tokens: 0,        # For reasoning models (o1, o3, gpt-5)
+  cached_tokens: 100,         # Cached input tokens
+  cache_creation_tokens: 0,   # Tokens used to create cache
+
+  # Cost breakdown (USD)
+  input_cost: 0.00045,
+  output_cost: 0.0006,
+  total_cost: 0.00105,
+
+  # Detailed cost by category
+  cost: %{
+    tokens: 0.00105,
+    tools: 0.02,              # Web search, function calls
+    images: 0.0,              # Image generation
+    total: 0.02105,
+    line_items: [...]         # Per-component cost details
+  },
+
+  # Tool usage (web search, etc.)
+  tool_usage: %{
+    web_search: %{count: 2, unit: "call"}
+  },
+
+  # Image usage (for image generation)
+  image_usage: %{
+    generated: %{count: 1, size_class: "1024x1024"}
+  }
+}
+```
+
+See the [Usage & Billing Guide](usage-and-billing.md) for comprehensive documentation.
+
 **How this supports normalization**:
 - One response object to extract text, structured objects, and usage across providers.
 

@@ -13,7 +13,16 @@ ReqLLM.generate_text!("anthropic:claude-haiku-4-5", "Hello world")
 
 # With full response metadata
 {:ok, response} = ReqLLM.generate_text("openai:gpt-4", "Hello", temperature: 0.7)
-response.usage  #=> %{input_tokens: 8, output_tokens: 12, total_cost: 0.0006}
+response.usage
+#=> %{
+#     input_tokens: 8,
+#     output_tokens: 12,
+#     total_tokens: 20,
+#     input_cost: 0.00024,
+#     output_cost: 0.00036,
+#     total_cost: 0.0006,
+#     cost: %{tokens: 0.0006, tools: 0.0, images: 0.0, total: 0.0006}
+#   }
 ```
 
 ### Streaming

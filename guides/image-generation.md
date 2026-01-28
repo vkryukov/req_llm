@@ -391,6 +391,54 @@ Google recommends describing scenes rather than listing keywords:
 
 ---
 
+## Usage & Cost Tracking
+
+Image generation responses include detailed usage and cost information:
+
+### Basic Usage
+
+```elixir
+{:ok, response} = ReqLLM.generate_image("openai:gpt-image-1", prompt)
+
+response.usage
+#=> %{
+#     image_usage: %{
+#       generated: %{count: 1, size_class: "1024x1024"}
+#     },
+#     cost: %{
+#       images: 0.04,
+#       tokens: 0.0,
+#       tools: 0.0,
+#       total: 0.04
+#     },
+#     input_cost: 0.0,
+#     output_cost: 0.04,
+#     total_cost: 0.04
+#   }
+```
+
+### Size Classes
+
+Image costs vary by size. The `size_class` field indicates the resolution tier used for billing:
+
+| Provider | Size Classes |
+|----------|-------------|
+| OpenAI | `"1024x1024"`, `"1536x1024"`, `"1024x1536"`, `"auto"` |
+| Google | Based on aspect ratio (e.g., `"1:1"`, `"16:9"`) |
+
+### Multiple Images
+
+When generating multiple images, the `count` reflects the total:
+
+```elixir
+{:ok, response} = ReqLLM.generate_image("openai:dall-e-2", prompt, n: 3)
+
+response.usage.image_usage.generated
+#=> %{count: 3, size_class: "1024x1024"}
+```
+
+---
+
 ## Error Handling
 
 ```elixir

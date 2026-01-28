@@ -25,6 +25,7 @@ Passed via `:provider_options` keyword:
 - **Modern (Gemini 2.5)**: `%{enable: true}`
 - **Legacy (Gemini 1.5)**: `%{dynamic_retrieval: %{mode: "MODE_DYNAMIC", dynamic_threshold: 0.7}}`
 - **Example**: `provider_options: [google_grounding: %{enable: true}]`
+- **Cost tracking**: Usage tracked in `response.usage.tool_usage.web_search` with `unit: "query"`
 
 ### `google_thinking_budget`
 - **Type**: Non-negative integer
@@ -71,6 +72,28 @@ Passed via `:provider_options` keyword:
 - **Type**: String
 - **Purpose**: Document title for better embedding quality
 - **Example**: `provider_options: [title: "Product Documentation", task_type: "RETRIEVAL_DOCUMENT"]`
+
+## Grounding Cost Tracking
+
+When using Google Search grounding, usage and costs are tracked in `response.usage`:
+
+```elixir
+{:ok, response} = ReqLLM.generate_text(
+  "google:gemini-3-flash-preview",
+  "What are the latest developments in quantum computing?",
+  provider_options: [google_grounding: %{enable: true}]
+)
+
+# Access grounding/search usage
+response.usage.tool_usage.web_search
+#=> %{count: 3, unit: "query"}
+
+# Access cost breakdown
+response.usage.cost
+#=> %{tokens: 0.001, tools: 0.015, images: 0.0, total: 0.016}
+```
+
+Google grounding uses `unit: "query"` to track the number of search queries performed.
 
 ## Wire Format Notes
 
