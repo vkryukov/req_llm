@@ -22,6 +22,8 @@ defmodule ReqLLM.Step.Usage do
   * Metadata: `%{model: %LLMDB.Model{}}`
   """
 
+  alias ReqLLM.MapAccess
+
   @event [:req_llm, :token_usage]
 
   @doc """
@@ -177,19 +179,31 @@ defmodule ReqLLM.Step.Usage do
            }
            | nil}
   defp compute_cost_breakdown(usage, %LLMDB.Model{} = model) do
-    case ReqLLM.Billing.calculate(usage, model) do
-      {:ok, nil} ->
-        {:ok, nil}
+    if usage_tokens_numeric?(usage) do
+      case ReqLLM.Billing.calculate(usage, model) do
+        {:ok, nil} ->
+          {:ok, nil}
 
-      {:ok, cost} ->
-        {:ok,
-         %{
-           input_cost: cost.input_cost,
-           output_cost: cost.output_cost,
-           total_cost: cost.total,
-           cost: cost
-         }}
+        {:ok, cost} ->
+          {:ok,
+           %{
+             input_cost: cost.input_cost,
+             output_cost: cost.output_cost,
+             total_cost: cost.total,
+             cost: cost
+           }}
+      end
+    else
+      {:ok, nil}
     end
+  end
+
+  defp usage_tokens_numeric?(usage) do
+    input = MapAccess.get(usage, :input_tokens) || MapAccess.get(usage, "input_tokens")
+    output = MapAccess.get(usage, :output_tokens) || MapAccess.get(usage, "output_tokens")
+    total = MapAccess.get(usage, :total_tokens) || MapAccess.get(usage, "total_tokens")
+
+    is_number(input) and is_number(output) and (total == nil or is_number(total))
   end
 
   defp maybe_merge_cost(usage, nil), do: usage

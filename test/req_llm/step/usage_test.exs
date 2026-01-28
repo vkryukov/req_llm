@@ -1070,7 +1070,7 @@ defmodule ReqLLM.Step.UsageTest do
       assert metadata.model == model
     end
 
-    test "handles Response struct without cost data gracefully" do
+    test "adds cost data when missing from Response struct" do
       # no cost map
       {:ok, model} = ReqLLM.model("openai:gpt-4")
       request = mock_request(model: model)
@@ -1088,14 +1088,14 @@ defmodule ReqLLM.Step.UsageTest do
 
       {_req, updated_resp} = Usage.handle({request, response})
 
-      # Check no cost fields are added
+      # Check cost fields are added
       response_usage = updated_resp.body.usage
       assert response_usage.input_tokens == 100
       assert response_usage.output_tokens == 50
       assert response_usage.total_tokens == 150
-      refute Map.has_key?(response_usage, :input_cost)
-      refute Map.has_key?(response_usage, :output_cost)
-      refute Map.has_key?(response_usage, :total_cost)
+      assert is_number(response_usage.input_cost)
+      assert is_number(response_usage.output_cost)
+      assert is_number(response_usage.total_cost)
     end
 
     test "handles Response struct with malformed usage gracefully" do

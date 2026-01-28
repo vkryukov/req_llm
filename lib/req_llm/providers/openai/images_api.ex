@@ -189,9 +189,7 @@ defmodule ReqLLM.Providers.OpenAI.ImagesAPI do
     size_value = normalize_image_size(size)
     quality_value = normalize_image_quality(quality)
 
-    if size_value && quality_value do
-      "#{size_value}:#{quality_value}"
-    end
+    "#{size_value}:#{quality_value}"
   end
 
   defp normalize_image_size(nil), do: "1024x1024"

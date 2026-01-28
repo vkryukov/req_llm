@@ -1284,7 +1284,7 @@ defmodule ReqLLM.Providers.Google do
   end
 
   defp add_usage_details(%ReqLLM.Response{} = response, tool_usage, image_usage) do
-    usage = response.usage || %{}
+    usage = response.usage
 
     usage =
       if map_size(tool_usage) > 0 do
@@ -1295,7 +1295,7 @@ defmodule ReqLLM.Providers.Google do
 
     usage = maybe_put_image_usage(usage, image_usage)
 
-    if usage == %{} and response.usage == nil do
+    if usage == %{} do
       response
     else
       %{response | usage: usage}

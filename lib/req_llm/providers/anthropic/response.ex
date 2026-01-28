@@ -324,8 +324,6 @@ defmodule ReqLLM.Providers.Anthropic.Response do
     end
   end
 
-  defp anthropic_tool_usage(_), do: %{}
-
   defp parse_finish_reason("stop"), do: :stop
   defp parse_finish_reason("max_tokens"), do: :length
   defp parse_finish_reason("tool_use"), do: :tool_calls
