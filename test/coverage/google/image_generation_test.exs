@@ -7,7 +7,7 @@ defmodule ReqLLM.Coverage.Google.ImageGenerationTest do
   @moduletag provider: "google"
   @moduletag timeout: 180_000
 
-  @model_spec "google:gemini-2.0-flash-exp-image-generation"
+  @model_spec "google:gemini-2.5-flash-image"
 
   setup_all do
     LLMDB.load(allow: :all, custom: %{})
@@ -15,8 +15,8 @@ defmodule ReqLLM.Coverage.Google.ImageGenerationTest do
   end
 
   @tag scenario: :image_basic
-  @tag model: "gemini-2.0-flash-exp-image-generation"
-  test "generate_image/3 returns a Response with one image part" do
+  @tag model: "gemini-2.5-flash-image"
+  test "generate_image/3 returns a Response with one image part and usage data" do
     {:ok, response} =
       ReqLLM.generate_image(
         @model_spec,
@@ -28,5 +28,7 @@ defmodule ReqLLM.Coverage.Google.ImageGenerationTest do
     assert part.type == :image
     assert part.media_type == "image/png"
     assert is_binary(part.data) and byte_size(part.data) > 0
+    assert response.usage.image_usage.generated.count == 1
+    assert response.usage.cost.images > 0
   end
 end

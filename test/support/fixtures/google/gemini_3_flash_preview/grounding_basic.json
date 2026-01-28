@@ -1,0 +1,216 @@
+{
+  "model_spec": "google:gemini-3-flash-preview",
+  "provider": "google",
+  "request": {
+    "body": {
+      "b64": "eyJjb250ZW50cyI6W3sicGFydHMiOlt7InRleHQiOiJXaGF0IGFyZSB0aGUgdG9wIDMgbmV3cyBoZWFkbGluZXMgdG9kYXk/In1dLCJyb2xlIjoidXNlciJ9XSwiZ2VuZXJhdGlvbkNvbmZpZyI6eyJjYW5kaWRhdGVDb3VudCI6MSwibWF4T3V0cHV0VG9rZW5zIjo2NTUzNn0sInRvb2xzIjpbeyJnb29nbGVfc2VhcmNoIjp7fX1dfQ=="
+    },
+    "canonical_json": {
+      "contents": [
+        {
+          "parts": [
+            {
+              "text": "What are the top 3 news headlines today?"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "generationConfig": {
+        "candidateCount": 1,
+        "maxOutputTokens": 65536
+      },
+      "tools": [
+        {
+          "google_search": {}
+        }
+      ]
+    },
+    "headers": {
+      "accept-encoding": [
+        "gzip"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "user-agent": [
+        "req/0.5.17"
+      ]
+    },
+    "method": "post",
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=[REDACTED]"
+  },
+  "response": {
+    "body": {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "As of today, Wednesday, January 28, 2026, the following are the top three news headlines dominating global and national discourse:\n\n### 1. **President Trump Increases Tariffs on South Korean Imports to 25%**\nIn a major shift in trade policy, U.S. President Donald Trump announced that tariffs on South Korean imports will be raised from 15% to 25%. The administration cited the South Korean legislature’s failure to implement a previously agreed-upon trade deal with Washington as the primary reason for the move. This escalation has sparked concerns about its impact on global supply chains, particularly in the technology and automotive sectors.\n\n### 2. **India and the European Union Finalize Historic Free Trade Deal**\nAfter two decades of complex negotiations, India and the European Union have officially finalized a landmark free trade agreement. The deal is expected to significantly boost bilateral trade—with a target of $100 billion—and enhance cooperation in security, defense, and digital regulation. Leaders from both regions hailed the agreement as a \"new chapter\" in global economic ties, aimed at deepening strategic partnerships and reducing trade barriers.\n\n### 3. **Massive Winter Storm Paralyzes Travel Across the United States**\nA severe winter storm is currently battering large portions of the U.S., leading to thousands of flight cancellations and widespread travel disruptions. Major hubs are reporting \"mass cancellations,\" and local authorities have issued emergency alerts as the storm brings heavy snow and freezing temperatures. The extreme weather has also raised concerns about infrastructure resilience during peak winter conditions.\n\n***\n\n**Other notable stories today include:**\n*   **Geopolitics:** Displaced families are beginning a limited return to **North Gaza** following a new hostage deal, while the White House confirmed that **Israel and Lebanon** have agreed to push back military withdrawal timelines amid border tensions.\n*   **Space Weather:** A major **solar storm** (the most intense in over 20 years) has triggered rare, widespread displays of the Aurora Australis and prompted the launch of new AI-driven space weather prediction technologies.\n*   **Public Health:** Authorities in **West Bengal, India**, have raised public health alerts following reports of Nipah virus cases, leading several Asian airports to enhance health screenings for travelers.",
+                "thoughtSignature": "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"
+              }
+            ],
+            "role": "model"
+          },
+          "finishReason": "STOP",
+          "groundingMetadata": {
+            "groundingChunks": [
+              {
+                "web": {
+                  "title": "indianexpress.com",
+                  "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHTNoUibE7fGUGcF6kbz4Li_te7MI7Ho6JdeboUAuJx6HHHlx2Y_aVQ0NTj0d-39RHwYUT3LSss5TY8nkSvasBb_1j1cIqP4SEnIIcElS1jhAM7c2afZ0Cmh8ofRSNIhCXMSWlWKDkk5xCzGPS4wRMXAmwGO1R7B3qi2urOpLHO-EpaklqgF-4vIJ30KX2X9hR76J9_oI6TkxSVm-cdKXm0UMDrC0I7JxCOsWvszphoOUe4mHzwVsoyz7BdwliQg558NWicxYlxbEsu7e_b7Qui9fM5bFIhUunMwI5qV4yqkluho0Cc9jzzAtpBFchgdByJNhuYADgVOX5YijnOPGrgwNQ-44w_hH3lNV5ZpA=="
+                }
+              },
+              {
+                "web": {
+                  "title": "leverageedu.com",
+                  "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGrGE9OGNzbDb_pZ3v0OjaDqY-SOtgwHaHw5YAFtEItZygOgvZpV5Bz9GMl-DpYeO_lvqxKs3Dq68dg-JhotMkUaVEuSYxenCyQOoVExOC-PufvzjFOGmU6hj-L-hAz7yIT_PlbgxqR1CzX7nW-hFwnk2hT7CRX8xPsJGPxfutoFI0CzjLL3HJgWFv1lEdtLtaGnfD4SwyglvGyObE="
+                }
+              },
+              {
+                "web": {
+                  "title": "indiatoday.in",
+                  "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHVW2YHEZZENjpc5_2h58spRm_gQvGZM1n-EESXJmrggOThXJnaZ9lP-xD5vheIwqWKR8oty6xznvDTArjMhEDTOqsAyPDF24rY-KaORKwE9BqWuQTSq39oX65L91nOlanzKZM-9APcT7oyWAMmOHVZXK1tZuDTukTYiXe2m4fMZfLz10sp0MiaLDw3WHhZuFSXVhonckpUjSlaUaQqlNVa3UCcK7xjxgOxSprhelP5JyEE56zF4qNR1PNFy0yIC4DScKL4ZwLEdrUsay6OdWjQRu0="
+                }
+              },
+              {
+                "web": {
+                  "title": "jagranjosh.com",
+                  "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFlzV0_iNLButmY3z6YIMXwthFgXXC5WUol5LHw2Wu228gv7PH_nItzkKqAZbKJ5F1RV4Hq45Tb1oS48yDQbc4fUXDvjjXNye5u8ZMJ8kWX3pdg7Or0GgiwZ4VkTWwVVdUIbQjdboTHT3eRRs035I6LOdiyVCk1HOFPlmXBWSKoQatEbCVuVQ7wq7GZVtxFI8GczpY-WTokRiz_M0hkBuKFCmOEV6zogV0BUvQOEhqALEfL-XaAQkCCyI50iiK0rJxdmy-BRbhK_M_fTC3SDppavIyxYO-KHlZa-IQFzQQPszu6WQ0lwdMo-a1Dn5GqzN79DKxcpMnyVQ=="
+                }
+              },
+              {
+                "web": {
+                  "title": "sundayguardianlive.com",
+                  "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGy2TUrq7TX5cE4WHuUqzfIonNgZgdSA18GFHMn42AGOWYmxT0mbwMvzs7vK__HhBt3xizngVoL8qopDXKIZAA9StDIBq8eJdECG8rvMeAyxbwfb1RRStt9eRE1T_e0RBklLxnO59ZmcogxkRs31fYAnrNvyy-p970Y252lAfV0Ybhh7KYuGHDB6kRG7k9LUbKPzDvgltTbxSbgyeFkxVph4L6ygUuMksKwUKMcirjXvhwL8FO7xSNcwjZ29lYo5BKfKBpOAb_Te42T5CR9PEkacE_qsSxAr0rn20XCCx6A4N1EaC3ttzC2fiFUwV4RJa46"
+                }
+              }
+            ],
+            "groundingSupports": [
+              {
+                "groundingChunkIndices": [
+                  0
+                ],
+                "segment": {
+                  "endIndex": 348,
+                  "startIndex": 139,
+                  "text": "**President Trump Increases Tariffs on South Korean Imports to 25%**\nIn a major shift in trade policy, U.S. President Donald Trump announced that tariffs on South Korean imports will be raised from 15% to 25%."
+                }
+              },
+              {
+                "groundingChunkIndices": [
+                  0
+                ],
+                "segment": {
+                  "endIndex": 515,
+                  "startIndex": 349,
+                  "text": "The administration cited the South Korean legislature’s failure to implement a previously agreed-upon trade deal with Washington as the primary reason for the move."
+                }
+              },
+              {
+                "groundingChunkIndices": [
+                  1
+                ],
+                "segment": {
+                  "endIndex": 855,
+                  "startIndex": 658,
+                  "text": "**India and the European Union Finalize Historic Free Trade Deal**\nAfter two decades of complex negotiations, India and the European Union have officially finalized a landmark free trade agreement."
+                }
+              },
+              {
+                "groundingChunkIndices": [
+                  2
+                ],
+                "segment": {
+                  "endIndex": 1409,
+                  "startIndex": 1190,
+                  "text": "**Massive Winter Storm Paralyzes Travel Across the United States**\nA severe winter storm is currently battering large portions of the U.S., leading to thousands of flight cancellations and widespread travel disruptions."
+                }
+              },
+              {
+                "groundingChunkIndices": [
+                  3,
+                  4
+                ],
+                "segment": {
+                  "endIndex": 1976,
+                  "startIndex": 1721,
+                  "text": "*   **Geopolitics:** Displaced families are beginning a limited return to **North Gaza** following a new hostage deal, while the White House confirmed that **Israel and Lebanon** have agreed to push back military withdrawal timelines amid border tensions."
+                }
+              },
+              {
+                "groundingChunkIndices": [
+                  1
+                ],
+                "segment": {
+                  "endIndex": 2413,
+                  "startIndex": 2204,
+                  "text": "*   **Public Health:** Authorities in **West Bengal, India**, have raised public health alerts following reports of Nipah virus cases, leading several Asian airports to enhance health screenings for travelers."
+                }
+              }
+            ],
+            "searchEntryPoint": {
+              "renderedContent": "<style>\n.container {\n  align-items: center;\n  border-radius: 8px;\n  display: flex;\n  font-family: Google Sans, Roboto, sans-serif;\n  font-size: 14px;\n  line-height: 20px;\n  padding: 8px 12px;\n}\n.chip {\n  display: inline-block;\n  border: solid 1px;\n  border-radius: 16px;\n  min-width: 14px;\n  padding: 5px 16px;\n  text-align: center;\n  user-select: none;\n  margin: 0 8px;\n  -webkit-tap-highlight-color: transparent;\n}\n.carousel {\n  overflow: auto;\n  scrollbar-width: none;\n  white-space: nowrap;\n  margin-right: -12px;\n}\n.headline {\n  display: flex;\n  margin-right: 4px;\n}\n.gradient-container {\n  position: relative;\n}\n.gradient {\n  position: absolute;\n  transform: translate(3px, -9px);\n  height: 36px;\n  width: 9px;\n}\n@media (prefers-color-scheme: light) {\n  .container {\n    background-color: #fafafa;\n    box-shadow: 0 0 0 1px #0000000f;\n  }\n  .headline-label {\n    color: #1f1f1f;\n  }\n  .chip {\n    background-color: #ffffff;\n    border-color: #d2d2d2;\n    color: #5e5e5e;\n    text-decoration: none;\n  }\n  .chip:hover {\n    background-color: #f2f2f2;\n  }\n  .chip:focus {\n    background-color: #f2f2f2;\n  }\n  .chip:active {\n    background-color: #d8d8d8;\n    border-color: #b6b6b6;\n  }\n  .logo-dark {\n    display: none;\n  }\n  .gradient {\n    background: linear-gradient(90deg, #fafafa 15%, #fafafa00 100%);\n  }\n}\n@media (prefers-color-scheme: dark) {\n  .container {\n    background-color: #1f1f1f;\n    box-shadow: 0 0 0 1px #ffffff26;\n  }\n  .headline-label {\n    color: #fff;\n  }\n  .chip {\n    background-color: #2c2c2c;\n    border-color: #3c4043;\n    color: #fff;\n    text-decoration: none;\n  }\n  .chip:hover {\n    background-color: #353536;\n  }\n  .chip:focus {\n    background-color: #353536;\n  }\n  .chip:active {\n    background-color: #464849;\n    border-color: #53575b;\n  }\n  .logo-light {\n    display: none;\n  }\n  .gradient {\n    background: linear-gradient(90deg, #1f1f1f 15%, #1f1f1f00 100%);\n  }\n}\n</style>\n<div class=\"container\">\n  <div class=\"headline\">\n    <svg class=\"logo-light\" width=\"18\" height=\"18\" viewBox=\"9 9 35 35\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n      <path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M42.8622 27.0064C42.8622 25.7839 42.7525 24.6084 42.5487 23.4799H26.3109V30.1568H35.5897C35.1821 32.3041 33.9596 34.1222 32.1258 35.3448V39.6864H37.7213C40.9814 36.677 42.8622 32.2571 42.8622 27.0064V27.0064Z\" fill=\"#4285F4\"/>\n      <path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M26.3109 43.8555C30.9659 43.8555 34.8687 42.3195 37.7213 39.6863L32.1258 35.3447C30.5898 36.3792 28.6306 37.0061 26.3109 37.0061C21.8282 37.0061 18.0195 33.9811 16.6559 29.906H10.9194V34.3573C13.7563 39.9841 19.5712 43.8555 26.3109 43.8555V43.8555Z\" fill=\"#34A853\"/>\n      <path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M16.6559 29.8904C16.3111 28.8559 16.1074 27.7588 16.1074 26.6146C16.1074 25.4704 16.3111 24.3733 16.6559 23.3388V18.8875H10.9194C9.74388 21.2072 9.06992 23.8247 9.06992 26.6146C9.06992 29.4045 9.74388 32.022 10.9194 34.3417L15.3864 30.8621L16.6559 29.8904V29.8904Z\" fill=\"#FBBC05\"/>\n      <path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M26.3109 16.2386C28.85 16.2386 31.107 17.1164 32.9095 18.8091L37.8466 13.8719C34.853 11.082 30.9659 9.3736 26.3109 9.3736C19.5712 9.3736 13.7563 13.245 10.9194 18.8875L16.6559 23.3388C18.0195 19.2636 21.8282 16.2386 26.3109 16.2386V16.2386Z\" fill=\"#EA4335\"/>\n    </svg>\n    <svg class=\"logo-dark\" width=\"18\" height=\"18\" viewBox=\"0 0 48 48\" xmlns=\"http://www.w3.org/2000/svg\">\n      <circle cx=\"24\" cy=\"23\" fill=\"#FFF\" r=\"22\"/>\n      <path d=\"M33.76 34.26c2.75-2.56 4.49-6.37 4.49-11.26 0-.89-.08-1.84-.29-3H24.01v5.99h8.03c-.4 2.02-1.5 3.56-3.07 4.56v.75l3.91 2.97h.88z\" fill=\"#4285F4\"/>\n      <path d=\"M15.58 25.77A8.845 8.845 0 0 0 24 31.86c1.92 0 3.62-.46 4.97-1.31l4.79 3.71C31.14 36.7 27.65 38 24 38c-5.93 0-11.01-3.4-13.45-8.36l.17-1.01 4.06-2.85h.8z\" fill=\"#34A853\"/>\n      <path d=\"M15.59 20.21a8.864 8.864 0 0 0 0 5.58l-5.03 3.86c-.98-2-1.53-4.25-1.53-6.64 0-2.39.55-4.64 1.53-6.64l1-.22 3.81 2.98.22 1.08z\" fill=\"#FBBC05\"/>\n      <path d=\"M24 14.14c2.11 0 4.02.75 5.52 1.98l4.36-4.36C31.22 9.43 27.81 8 24 8c-5.93 0-11.01 3.4-13.45 8.36l5.03 3.85A8.86 8.86 0 0 1 24 14.14z\" fill=\"#EA4335\"/>\n    </svg>\n    <div class=\"gradient-container\"><div class=\"gradient\"></div></div>\n  </div>\n  <div class=\"carousel\">\n    <a class=\"chip\" href=\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEiNqPw8sh7C_zdfB5A5HjZoXlMmn03B9mZB4PPwDkNl17Nw3yIRH-POlzKAGxjTNRuKn3HsHWZJGky4jG6EeCayxA1rm5WT7fsYJepZcqLuLTObxcoypRdXW4kJRQo4xcQuhhtbp_ML2MPfkamyK3v9hxpOR3ym1_h8yuOM7WS49LQgGaFOwdFqWedX6Dt7LryYhP1vgCqNxWIweJI-ImtcdQGD9Rxbw==\">world news headlines January 28 2026</a>\n    <a class=\"chip\" href=\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFxGzLrEmjBvbES0Q11BglaMZEifb130NxaygLK5yCHAPWYc9J6T4pI4HKZ2y37Q2mjWhQ5SQn9YOjlmP9eYS4AxSQiH_5mDlqy2PoQo5JuYtyhhadsLpv5fSGF3qHO86HmWGm4HZMcEZMduT6T1Yc0384X4lneGR4UyhMyXxApwxaCvbtH_kK3KGjuI9MvUBc7hw3kcHMOlYEWoiFLqWQ9itoGM5GblSGvcKU=\">top news headlines today January 28 2026</a>\n    <a class=\"chip\" href=\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8ZErFg32nhDQP6p8e1y0QYRRrFazgFtztfQaDnsUzvy5kchROq92WUbVI4BGO8KLcJuT5fs8wnuQQUjoTNh9wRRIGGz7y7U3bV1iUhwR6JqRgWAtAjbJeq-Rt2wsiTV09qjsOyYQPk2yKo0nyNBL1SbUf2EAMXYadUyNDu7gKB7ZNVfMvQvO6qjtN0mJCZWcnNAmnCha1UKFfGgRGqO7oLxG2Dwz28XQUNbuaf_mTbH4=\">top 3 major news stories today January 28 2026</a>\n  </div>\n</div>\n"
+            },
+            "webSearchQueries": [
+              "top news headlines today January 28 2026",
+              "world news headlines January 28 2026",
+              "top 3 major news stories today January 28 2026"
+            ]
+          },
+          "index": 0
+        }
+      ],
+      "modelVersion": "gemini-3-flash-preview",
+      "responseId": "rXZ5abPlCdjVjrEPv66K-Qg",
+      "usageMetadata": {
+        "candidatesTokenCount": 472,
+        "promptTokenCount": 96,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 96
+          }
+        ],
+        "thoughtsTokenCount": 963,
+        "totalTokenCount": 1531
+      }
+    },
+    "headers": {
+      "alt-svc": [
+        "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+      ],
+      "content-type": [
+        "application/json; charset=UTF-8"
+      ],
+      "date": [
+        "Wed, 28 Jan 2026 02:38:37 GMT"
+      ],
+      "server": [
+        "scaffolding on HTTPServer2"
+      ],
+      "server-timing": [
+        "gfet4t7; dur=13962"
+      ],
+      "transfer-encoding": [
+        "chunked"
+      ],
+      "vary": [
+        "Origin",
+        "X-Origin",
+        "Referer"
+      ],
+      "x-content-type-options": [
+        "nosniff"
+      ],
+      "x-frame-options": [
+        "SAMEORIGIN"
+      ],
+      "x-xss-protection": [
+        "0"
+      ]
+    },
+    "status": 200
+  }
+}

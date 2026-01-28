@@ -7,7 +7,7 @@ defmodule ReqLLM.Coverage.OpenAI.ImageGenerationTest do
   @moduletag provider: "openai"
   @moduletag timeout: 180_000
 
-  @model_spec "openai:gpt-image-1"
+  @model_spec "openai:gpt-image-1.5"
 
   setup_all do
     LLMDB.load(allow: :all, custom: %{})
@@ -15,8 +15,8 @@ defmodule ReqLLM.Coverage.OpenAI.ImageGenerationTest do
   end
 
   @tag scenario: :image_basic
-  @tag model: "gpt-image-1"
-  test "generate_image/3 returns a Response with one image part" do
+  @tag model: "gpt-image-1.5"
+  test "generate_image/3 returns a Response with one image part and usage data" do
     {:ok, response} =
       ReqLLM.generate_image(
         @model_spec,
@@ -28,5 +28,7 @@ defmodule ReqLLM.Coverage.OpenAI.ImageGenerationTest do
     assert part.type == :image
     assert is_binary(part.media_type) and part.media_type != ""
     assert is_binary(part.data) and byte_size(part.data) > 0
+    assert response.usage.image_usage.generated.count == 1
+    assert response.usage.cost.images > 0
   end
 end

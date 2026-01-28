@@ -66,6 +66,9 @@ defmodule ReqLLM.Coverage.Google.GroundingTest do
             assert is_binary(source["uri"])
           end
         end
+
+        assert response.usage.tool_usage.web_search.count > 0
+        assert response.usage.cost.tools > 0
       end
 
       @tag scenario: :grounding_with_context
@@ -95,6 +98,9 @@ defmodule ReqLLM.Coverage.Google.GroundingTest do
         if grounding_data do
           assert is_map(grounding_data)
         end
+
+        assert response.usage.tool_usage.web_search.count > 0
+        assert response.usage.cost.tools > 0
       end
 
       @tag scenario: :grounding_streaming
