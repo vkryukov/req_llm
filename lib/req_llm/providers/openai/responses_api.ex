@@ -636,15 +636,13 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
   end
 
   defp ensure_deep_research_tool_present(nil) do
-    Logger.info(
-      "Auto-injecting web_search_preview tool for deep research model (no tools provided)"
-    )
+    Logger.info("Auto-injecting web_search tool for deep research model (no tools provided)")
 
-    [%{"type" => "web_search_preview"}]
+    [%{"type" => "web_search"}]
   end
 
   defp ensure_deep_research_tool_present(tools) when is_list(tools) do
-    deep_tools = ["web_search_preview", "mcp", "file_search"]
+    deep_tools = ["web_search", "web_search_preview", "mcp", "file_search"]
 
     has_deep_tool? =
       Enum.any?(tools, fn t ->
@@ -655,10 +653,10 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       tools
     else
       Logger.info(
-        "Auto-injecting web_search_preview tool for deep research model (tools: #{inspect(Enum.map(tools, & &1["type"]))})"
+        "Auto-injecting web_search tool for deep research model (tools: #{inspect(Enum.map(tools, & &1["type"]))})"
       )
 
-      [%{"type" => "web_search_preview"} | tools]
+      [%{"type" => "web_search"} | tools]
     end
   end
 
@@ -677,34 +675,40 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
   end
 
   defp encode_tool_for_responses_api(tool_schema) when is_map(tool_schema) do
-    function_def = tool_schema["function"] || tool_schema[:function]
+    tool_type = tool_schema["type"] || tool_schema[:type]
 
-    if function_def do
-      name = function_def["name"] || function_def[:name]
-      description = function_def["description"] || function_def[:description]
-      raw_params = function_def["parameters"] || function_def[:parameters]
-      params = normalize_parameters_for_strict(raw_params)
-
-      %{
-        "type" => "function",
-        "name" => name,
-        "description" => description,
-        "parameters" => params,
-        "strict" => true
-      }
+    if tool_type in ["web_search", "web_search_preview", "file_search", "mcp"] do
+      stringify_keys(tool_schema)
     else
-      name = tool_schema["name"] || tool_schema[:name]
-      description = tool_schema["description"] || tool_schema[:description]
-      raw_params = tool_schema["parameters"] || tool_schema[:parameters]
-      params = normalize_parameters_for_strict(raw_params)
+      function_def = tool_schema["function"] || tool_schema[:function]
 
-      %{
-        "type" => "function",
-        "name" => name,
-        "description" => description,
-        "parameters" => params,
-        "strict" => true
-      }
+      if function_def do
+        name = function_def["name"] || function_def[:name]
+        description = function_def["description"] || function_def[:description]
+        raw_params = function_def["parameters"] || function_def[:parameters]
+        params = normalize_parameters_for_strict(raw_params)
+
+        %{
+          "type" => "function",
+          "name" => name,
+          "description" => description,
+          "parameters" => params,
+          "strict" => true
+        }
+      else
+        name = tool_schema["name"] || tool_schema[:name]
+        description = tool_schema["description"] || tool_schema[:description]
+        raw_params = tool_schema["parameters"] || tool_schema[:parameters]
+        params = normalize_parameters_for_strict(raw_params)
+
+        %{
+          "type" => "function",
+          "name" => name,
+          "description" => description,
+          "parameters" => params,
+          "strict" => true
+        }
+      end
     end
   end
 
@@ -1086,9 +1090,18 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       get_in(response_data, ["usage", "input_tokens_details", "cached_tokens"]) ||
         get_in(response_data, ["usage", "prompt_tokens_details", "cached_tokens"]) || 0
 
-    usage
-    |> Map.put(:cached_tokens, cached_tokens)
-    |> Map.put(:reasoning_tokens, reasoning_tokens)
+    usage =
+      usage
+      |> Map.put(:cached_tokens, cached_tokens)
+      |> Map.put(:reasoning_tokens, reasoning_tokens)
+
+    web_search_calls = count_web_search_calls(response_data)
+
+    if web_search_calls > 0 do
+      Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, web_search_calls, :call))
+    else
+      usage
+    end
   end
 
   # The Responses API returns "completed" status even when tool calls are present.
@@ -1110,6 +1123,14 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       _ ->
         :stop
     end
+  end
+
+  defp count_web_search_calls(response_data) do
+    output = response_data["output"] || response_data[:output] || []
+
+    Enum.count(output, fn item ->
+      (item["type"] || item[:type]) == "web_search_call"
+    end)
   end
 
   defp normalize_finish_reason("stop"), do: :stop

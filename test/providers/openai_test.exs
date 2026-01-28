@@ -1066,4 +1066,36 @@ defmodule ReqLLM.Providers.OpenAITest do
       assert text == ~s({"name":"Mara Ellington"})
     end
   end
+
+  describe "ResponsesAPI tool encoding" do
+    test "passes through built-in web_search tool definitions" do
+      {:ok, model} = ReqLLM.model("openai:gpt-5-nano")
+
+      context = %ReqLLM.Context{
+        messages: [
+          %ReqLLM.Message{
+            role: :user,
+            content: [%ReqLLM.Message.ContentPart{type: :text, text: "Search the web"}]
+          }
+        ]
+      }
+
+      opts = [
+        context: context,
+        model: model.model,
+        tools: [%{"type" => "web_search"}]
+      ]
+
+      request = %Req.Request{
+        url: URI.parse("https://api.openai.com/v1/responses"),
+        method: :post,
+        options: opts
+      }
+
+      encoded_request = ReqLLM.Providers.OpenAI.ResponsesAPI.encode_body(request)
+      body = Jason.decode!(encoded_request.body)
+
+      assert Enum.any?(body["tools"], fn tool -> tool["type"] == "web_search" end)
+    end
+  end
 end

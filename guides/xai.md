@@ -18,28 +18,25 @@ Passed via `:provider_options` keyword:
 - **Note**: ReqLLM auto-translates `max_tokens` for models requiring it
 - **Example**: `provider_options: [max_completion_tokens: 2000]`
 
-### `search_parameters`
-- **Type**: Map
-- **Purpose**: Enable Live Search with real-time web access
-- **Keys**:
-  - `mode`: `"auto"` (default), `"always"`, or `"never"`
-  - `max_sources`: Maximum sources to cite (integer)
-  - `date_range`: `"recent"`, `"week"`, `"month"`, `"year"`
-  - `citations`: Include citations (boolean)
+### `xai_tools`
+- **Type**: List of maps
+- **Purpose**: Enable agent tools such as web search
 - **Example**:
   ```elixir
   provider_options: [
-    search_parameters: %{
-      mode: "auto",
-      max_sources: 5,
-      date_range: "recent",
-      citations: true
-    }
+    xai_tools: [
+      %{type: "web_search"}
+    ]
   ]
   ```
-- **Note**: Live Search incurs additional costs per source
+- **Web search options**:
+  - `allowed_domains` - Allow list of domains
+  - `excluded_domains` - Block list of domains
+  - `enable_image_understanding` - Enable image understanding during search
+- **Note**: `search_parameters` is deprecated and will be removed in a future release
 
 ### `parallel_tool_calls`
+
 - **Type**: Boolean
 - **Default**: `true`
 - **Purpose**: Allow parallel function calls

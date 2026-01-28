@@ -566,7 +566,7 @@ defmodule ReqLLM.Providers.XAITest do
           parallel_tool_calls: false,
           max_completion_tokens: 1024,
           reasoning_effort: "low",
-          search_parameters: %{mode: "on"}
+          xai_tools: [%{type: "web_search"}]
         ]
       }
 
@@ -576,7 +576,7 @@ defmodule ReqLLM.Providers.XAITest do
       assert decoded["parallel_tool_calls"] == false
       assert decoded["max_completion_tokens"] == 1024
       assert decoded["reasoning_effort"] == "low"
-      assert decoded["search_parameters"]["mode"] == "on"
+      assert Enum.any?(decoded["tools"], fn tool -> tool["type"] == "web_search" end)
     end
   end
 
@@ -592,12 +592,13 @@ defmodule ReqLLM.Providers.XAITest do
       assert hd(warnings) =~ "max_completion_tokens"
     end
 
-    test "handles web_search_options -> search_parameters alias" do
+    test "handles web_search_options -> xai_tools alias" do
       {:ok, model} = ReqLLM.model("xai:grok-3")
       opts = [web_search_options: %{mode: "auto"}]
       {translated_opts, warnings} = XAI.translate_options(:chat, model, opts)
 
-      assert Keyword.get(translated_opts, :search_parameters) == %{mode: "auto"}
+      xai_tools = Keyword.get(translated_opts, :xai_tools, [])
+      assert Enum.any?(xai_tools, fn tool -> tool["type"] == "web_search" end)
       refute Keyword.has_key?(translated_opts, :web_search_options)
       assert length(warnings) == 1
     end

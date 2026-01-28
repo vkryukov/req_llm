@@ -38,7 +38,7 @@ defmodule ReqLLM.Providers.XAI do
   Beyond standard OpenAI parameters, xAI supports:
   - `max_completion_tokens` - Preferred over max_tokens for Grok-4 models
   - `reasoning_effort` - Reasoning level (low, medium, high) for Grok-3 mini models only
-  - `search_parameters` - Live Search configuration with web search capabilities
+  - `xai_tools` - Agent tools configuration (e.g., web_search, x_search)
   - `parallel_tool_calls` - Allow parallel function calls (default: true)
   - `stream_options` - Streaming configuration (include_usage)
   - `xai_structured_output_mode` - Control structured output implementation (:auto, :json_schema, :tool_strict)
@@ -48,7 +48,7 @@ defmodule ReqLLM.Providers.XAI do
   - Native structured outputs supported on models >= `grok-2-1212` and `grok-2-vision-1212`
   - `reasoning_effort` is only supported for grok-3-mini and grok-3-mini-fast models
   - Grok-4 models do not support `stop`, `presence_penalty`, or `frequency_penalty`
-  - Live Search via `search_parameters` incurs additional costs per source
+  - Agent tools (e.g., web_search) incur additional costs per source
 
   ## Schema Constraints (Native Mode)
 
@@ -104,7 +104,7 @@ defmodule ReqLLM.Providers.XAI do
   use ReqLLM.Provider.Defaults
 
   import ReqLLM.Provider.Utils,
-    only: [maybe_put: 3, maybe_put_skip: 4, ensure_parsed_body: 1]
+    only: [maybe_put: 3, maybe_put_skip: 4, ensure_parsed_body: 1, stringify_keys: 1]
 
   require Logger
 
@@ -115,7 +115,12 @@ defmodule ReqLLM.Providers.XAI do
     ],
     search_parameters: [
       type: :map,
-      doc: "Live Search configuration with mode, sources, dates, and citations"
+      doc:
+        "Deprecated Live Search configuration. Use xai_tools with %{type: \"web_search\"} instead."
+    ],
+    xai_tools: [
+      type: {:list, :map},
+      doc: "Agent tools configuration (e.g., [%{type: \"web_search\"}])"
     ],
     parallel_tool_calls: [
       type: :boolean,
@@ -176,8 +181,60 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   @impl ReqLLM.Provider
+  def prepare_request(:chat, model_spec, input, opts) do
+    prepare_chat_request(model_spec, input, opts)
+  end
+
+  @impl ReqLLM.Provider
   def prepare_request(operation, model_spec, input, opts) do
     ReqLLM.Provider.Defaults.prepare_request(__MODULE__, operation, model_spec, input, opts)
+  end
+
+  defp prepare_chat_request(model_spec, prompt, opts) do
+    with {:ok, model} <- ReqLLM.model(model_spec),
+         {:ok, context} <- ReqLLM.Context.normalize(prompt, opts),
+         opts_with_context = Keyword.put(opts, :context, context),
+         http_opts = Keyword.get(opts, :req_http_options, []),
+         {:ok, processed_opts} <-
+           ReqLLM.Provider.Options.process(__MODULE__, :chat, model, opts_with_context) do
+      use_responses = use_responses_api?(processed_opts)
+
+      req_keys =
+        supported_provider_options() ++
+          [:context, :operation, :text, :stream, :model, :provider_options, :xai_api_type]
+
+      path = if use_responses, do: "/responses", else: "/chat/completions"
+
+      request =
+        Req.new(
+          [
+            url: path,
+            method: :post,
+            receive_timeout: Keyword.get(processed_opts, :receive_timeout, 30_000)
+          ] ++ http_opts
+        )
+        |> Req.Request.register_options(req_keys)
+        |> Req.Request.merge_options(
+          Keyword.take(processed_opts, req_keys) ++
+            [
+              model: model.id,
+              base_url: Keyword.get(processed_opts, :base_url, default_base_url()),
+              xai_api_type: if(use_responses, do: :responses, else: :chat)
+            ]
+        )
+        |> attach(model, processed_opts)
+
+      {:ok, request}
+    end
+  end
+
+  defp use_responses_api?(opts) do
+    xai_tools = Keyword.get(opts, :xai_tools, [])
+
+    Enum.any?(xai_tools, fn tool ->
+      tool_type = normalize_tool_type(Map.get(tool, "type") || Map.get(tool, :type))
+      tool_type in ["web_search", "x_search"]
+    end)
   end
 
   defp ensure_min_tokens(opts) do
@@ -278,7 +335,7 @@ defmodule ReqLLM.Providers.XAI do
     case body do
       %{"usage" => usage} ->
         normalized_usage = Map.put_new(usage, "cached_tokens", 0)
-        normalized_usage = maybe_add_xai_tool_usage(normalized_usage)
+        normalized_usage = maybe_add_xai_tool_usage(normalized_usage, body)
         {:ok, normalized_usage}
 
       _ ->
@@ -288,13 +345,51 @@ defmodule ReqLLM.Providers.XAI do
 
   def extract_usage(_, _), do: {:error, :invalid_body}
 
-  defp maybe_add_xai_tool_usage(usage) when is_map(usage) do
-    sources = Map.get(usage, "num_sources_used") || Map.get(usage, :num_sources_used)
+  defp maybe_add_xai_tool_usage(usage, body) when is_map(usage) do
+    sources =
+      Map.get(usage, "num_sources_used") ||
+        Map.get(usage, :num_sources_used) ||
+        extract_server_tool_usage(body)
 
-    if is_number(sources) and sources > 0 do
-      Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, sources, :source))
-    else
-      usage
+    web_search_calls = extract_web_search_calls(usage)
+
+    cond do
+      is_number(web_search_calls) and web_search_calls > 0 ->
+        Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, web_search_calls, :call))
+
+      is_number(sources) and sources > 0 ->
+        Map.put(usage, :tool_usage, ReqLLM.Usage.Tool.build(:web_search, sources, :source))
+
+      true ->
+        usage
+    end
+  end
+
+  defp extract_web_search_calls(usage) when is_map(usage) do
+    details = ReqLLM.MapAccess.get(usage, :server_side_tool_usage_details, %{})
+    ReqLLM.MapAccess.get(details, :web_search_calls)
+  end
+
+  defp extract_server_tool_usage(body) when is_map(body) do
+    tool_usage =
+      Map.get(body, "server_side_tool_usage") ||
+        Map.get(body, :server_side_tool_usage) ||
+        Map.get(body, "server_side_tool_use") ||
+        Map.get(body, :server_side_tool_use)
+
+    case tool_usage do
+      %{} = usage ->
+        Map.get(usage, "web_search") ||
+          Map.get(usage, :web_search) ||
+          Map.get(usage, "SERVER_SIDE_TOOL_WEB_SEARCH") ||
+          Map.get(usage, :SERVER_SIDE_TOOL_WEB_SEARCH) ||
+          Map.get(usage, "x_search") ||
+          Map.get(usage, :x_search) ||
+          Map.get(usage, "SERVER_SIDE_TOOL_X_SEARCH") ||
+          Map.get(usage, :SERVER_SIDE_TOOL_X_SEARCH)
+
+      _ ->
+        nil
     end
   end
 
@@ -465,24 +560,31 @@ defmodule ReqLLM.Providers.XAI do
     base_url = ReqLLM.Provider.Options.effective_base_url(__MODULE__, model, translated_opts)
     opts_with_base_url = Keyword.put(translated_opts, :base_url, base_url)
 
-    ReqLLM.Provider.Defaults.default_attach_stream(
-      __MODULE__,
-      model,
-      context,
-      opts_with_base_url,
-      finch_name
-    )
+    if use_responses_api?(opts_with_base_url) do
+      ReqLLM.Providers.OpenAI.ResponsesAPI.attach_stream(
+        model,
+        context,
+        opts_with_base_url,
+        finch_name
+      )
+    else
+      ReqLLM.Provider.Defaults.default_attach_stream(
+        __MODULE__,
+        model,
+        context,
+        opts_with_base_url,
+        finch_name
+      )
+    end
   end
 
   @impl ReqLLM.Provider
   def translate_options(_operation, model, opts) do
     warnings = []
 
-    # Handle stream? -> stream alias for backward compatibility
     {stream_value, opts} = Keyword.pop(opts, :stream?)
     opts = if stream_value, do: Keyword.put(opts, :stream, stream_value), else: opts
 
-    # Translate canonical reasoning_effort from atom to string
     {reasoning_effort, opts} = Keyword.pop(opts, :reasoning_effort)
 
     opts =
@@ -497,7 +599,20 @@ defmodule ReqLLM.Providers.XAI do
 
     opts = Keyword.delete(opts, :reasoning_token_budget)
 
-    # Handle max_tokens -> max_completion_tokens translation (xAI preference)
+    {xai_tools, opts} = Keyword.pop(opts, :xai_tools, [])
+    {tools, opts} = Keyword.pop(opts, :tools, [])
+    {xai_tools_from_tools, tools} = split_xai_tools(tools)
+    xai_tools = List.wrap(xai_tools) ++ xai_tools_from_tools
+    opts = if tools == [], do: opts, else: Keyword.put(opts, :tools, tools)
+
+    {search_parameters, opts} = Keyword.pop(opts, :search_parameters)
+    {web_search_options, opts} = Keyword.pop(opts, :web_search_options)
+
+    {xai_tools, warnings} =
+      maybe_add_web_search_tool(xai_tools, search_parameters, web_search_options, warnings)
+
+    opts = if xai_tools == [], do: opts, else: Keyword.put(opts, :xai_tools, xai_tools)
+
     {max_tokens_value, opts} = Keyword.pop(opts, :max_tokens)
 
     {opts, warnings} =
@@ -510,20 +625,6 @@ defmodule ReqLLM.Providers.XAI do
         {opts, warnings}
       end
 
-    # Handle web_search_options -> search_parameters alias
-    {web_search_options, opts} = Keyword.pop(opts, :web_search_options)
-
-    {opts, warnings} =
-      if web_search_options do
-        warning = "web_search_options is deprecated, use search_parameters instead"
-        current_search = Keyword.get(opts, :search_parameters, %{})
-        merged_search = Map.merge(web_search_options, current_search)
-        {Keyword.put(opts, :search_parameters, merged_search), [warning | warnings]}
-      else
-        {opts, warnings}
-      end
-
-    # Remove unsupported parameters with warnings
     unsupported_params = [:logit_bias, :service_tier]
 
     {opts, warnings} =
@@ -538,7 +639,6 @@ defmodule ReqLLM.Providers.XAI do
         end
       end)
 
-    # Validate reasoning_effort model compatibility
     {reasoning_effort, opts} = Keyword.pop(opts, :reasoning_effort)
 
     {opts, warnings} =
@@ -558,35 +658,199 @@ defmodule ReqLLM.Providers.XAI do
     {opts, Enum.reverse(warnings)}
   end
 
+  defp split_xai_tools(nil), do: {[], []}
+
+  defp split_xai_tools(tools) when is_list(tools) do
+    {xai_tools, other_tools} = Enum.split_with(tools, &xai_tool_entry?/1)
+    {normalize_xai_tools(xai_tools), other_tools}
+  end
+
+  defp split_xai_tools(tool), do: split_xai_tools([tool])
+
+  defp xai_tool_entry?(%{} = tool) do
+    tool_type = normalize_tool_type(Map.get(tool, "type") || Map.get(tool, :type))
+    tool_type in ["web_search", "x_search", "live_search"]
+  end
+
+  defp xai_tool_entry?(_), do: false
+
+  defp normalize_tool_type(type) when is_atom(type), do: Atom.to_string(type)
+  defp normalize_tool_type(type) when is_binary(type), do: type
+  defp normalize_tool_type(_), do: nil
+
+  defp normalize_xai_tools(tools) do
+    tools
+    |> List.wrap()
+    |> Enum.filter(&is_map/1)
+    |> Enum.map(&normalize_xai_tool/1)
+  end
+
+  defp normalize_xai_tool(tool) do
+    normalized = stringify_keys(tool)
+    tool_type = normalize_tool_type(Map.get(normalized, "type"))
+
+    case tool_type do
+      "live_search" -> Map.put(normalized, "type", "web_search")
+      _ -> normalized
+    end
+  end
+
+  defp maybe_add_web_search_tool(xai_tools, search_parameters, web_search_options, warnings) do
+    if search_parameters != nil or web_search_options != nil do
+      warning =
+        "search_parameters is deprecated. Use xai_tools with %{type: \"web_search\"} instead."
+
+      updated_tools = ensure_xai_tool(xai_tools, %{"type" => "web_search"})
+      {updated_tools, [warning | warnings]}
+    else
+      {xai_tools, warnings}
+    end
+  end
+
+  defp ensure_xai_tool(xai_tools, tool) do
+    normalized = normalize_xai_tools(xai_tools)
+    normalized_tool = normalize_xai_tool(tool)
+    tool_type = normalize_tool_type(Map.get(normalized_tool, "type"))
+
+    if Enum.any?(normalized, fn existing -> Map.get(existing, "type") == tool_type end) do
+      normalized
+    else
+      normalized ++ [normalized_tool]
+    end
+  end
+
+  defp merge_xai_tools(existing, xai_tools) do
+    existing_tools = List.wrap(existing)
+    new_tools = normalize_xai_tools(xai_tools)
+
+    case {existing_tools, new_tools} do
+      {[], []} -> nil
+      _ -> existing_tools ++ new_tools
+    end
+  end
+
+  @impl ReqLLM.Provider
+  def decode_stream_event(event, model) do
+    if responses_stream_event?(event) do
+      ReqLLM.Providers.OpenAI.ResponsesAPI.decode_stream_event(event, model)
+    else
+      ReqLLM.Provider.Defaults.default_decode_stream_event(event, model)
+    end
+  end
+
+  defp responses_stream_event?(%{event: event}) when is_binary(event) do
+    String.starts_with?(event, "response.")
+  end
+
+  defp responses_stream_event?(%{data: %{"event" => event}}) when is_binary(event) do
+    String.starts_with?(event, "response.")
+  end
+
+  defp responses_stream_event?(%{data: %{"type" => type}}) when is_binary(type) do
+    String.starts_with?(type, "response.")
+  end
+
+  defp responses_stream_event?(_), do: false
+
   @doc """
   Custom body encoding that adds xAI-specific extensions to the default OpenAI-compatible format.
 
   Adds support for:
   - max_completion_tokens (preferred over max_tokens for Grok-4)
   - reasoning_effort (low, medium, high) for grok-3-mini models
-  - search_parameters (Live Search configuration)
+  - xai_tools (agent tool configuration)
   - parallel_tool_calls (with skip for true default)
   - stream_options (streaming configuration)
   """
   @impl ReqLLM.Provider
   def encode_body(request) do
-    # Start with default encoding
+    case request.options[:xai_api_type] do
+      :responses -> encode_responses_body(request)
+      _ -> encode_chat_body(request)
+    end
+  end
+
+  defp encode_chat_body(request) do
     request = ReqLLM.Provider.Defaults.default_encode_body(request)
 
-    # Parse the encoded body to add xAI-specific options
     body = Jason.decode!(request.body)
+
+    tools = merge_xai_tools(body["tools"], request.options[:xai_tools])
 
     enhanced_body =
       body
       |> maybe_put(:max_completion_tokens, request.options[:max_completion_tokens])
       |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
-      |> maybe_put(:search_parameters, request.options[:search_parameters])
       |> maybe_put_skip(:parallel_tool_calls, request.options[:parallel_tool_calls], [true])
       |> maybe_put(:stream_options, request.options[:stream_options])
+      |> maybe_put(:tools, tools)
 
-    # Re-encode with xAI extensions
     encoded_body = Jason.encode!(enhanced_body)
     Map.put(request, :body, encoded_body)
+  end
+
+  defp encode_responses_body(request) do
+    request
+    |> merge_xai_tools_for_responses()
+    |> normalize_responses_token_limit()
+    |> ReqLLM.Providers.OpenAI.ResponsesAPI.encode_body()
+  end
+
+  defp merge_xai_tools_for_responses(%Req.Request{} = request) do
+    opts = request.options
+    tools = List.wrap(opts_get(opts, :tools, []))
+    xai_tools = normalize_xai_tools(opts_get(opts, :xai_tools, []))
+    merged_tools = tools ++ xai_tools
+
+    opts =
+      opts
+      |> opts_delete(:xai_tools)
+      |> maybe_put_tools(merged_tools)
+
+    %{request | options: opts}
+  end
+
+  defp maybe_put_tools(opts, []), do: opts_delete(opts, :tools)
+  defp maybe_put_tools(opts, tools), do: opts_put(opts, :tools, tools)
+
+  defp normalize_responses_token_limit(%Req.Request{} = request) do
+    opts = request.options
+    max_output_tokens = opts_get(opts, :max_output_tokens)
+    max_completion_tokens = opts_get(opts, :max_completion_tokens)
+
+    opts =
+      if is_nil(max_output_tokens) and is_number(max_completion_tokens) do
+        opts_put(opts, :max_output_tokens, max_completion_tokens)
+      else
+        opts
+      end
+
+    opts = opts_delete(opts, :max_completion_tokens)
+    %{request | options: opts}
+  end
+
+  defp opts_get(opts, key, default \\ nil) do
+    cond do
+      is_list(opts) -> Keyword.get(opts, key, default)
+      is_map(opts) -> ReqLLM.MapAccess.get(opts, key, default)
+      true -> default
+    end
+  end
+
+  defp opts_put(opts, key, value) do
+    cond do
+      is_list(opts) -> Keyword.put(opts, key, value)
+      is_map(opts) -> Map.put(opts, key, value)
+      true -> opts
+    end
+  end
+
+  defp opts_delete(opts, key) do
+    cond do
+      is_list(opts) -> Keyword.delete(opts, key)
+      is_map(opts) -> Map.delete(opts, key)
+      true -> opts
+    end
   end
 
   @doc """
@@ -604,12 +868,45 @@ defmodule ReqLLM.Providers.XAI do
   """
   @impl ReqLLM.Provider
   def decode_response({req, resp}) do
-    case resp.status do
-      200 ->
-        decode_success_response(req, resp)
+    if req.options[:xai_api_type] == :responses do
+      raw_body = resp.body
 
-      status ->
-        decode_error_response(req, resp, status)
+      case ReqLLM.Providers.OpenAI.ResponsesAPI.decode_response({req, resp}) do
+        {req, %Req.Response{} = decoded_resp} ->
+          {req, merge_responses_tool_usage(decoded_resp, raw_body)}
+
+        other ->
+          other
+      end
+    else
+      case resp.status do
+        200 ->
+          decode_success_response(req, resp)
+
+        status ->
+          decode_error_response(req, resp, status)
+      end
+    end
+  end
+
+  defp merge_responses_tool_usage(%Req.Response{} = resp, raw_body) do
+    case extract_usage(raw_body, nil) do
+      {:ok, usage} ->
+        normalized = ReqLLM.Usage.Normalize.normalize(usage)
+        tool_usage = normalized[:tool_usage]
+
+        case resp.body do
+          %ReqLLM.Response{usage: response_usage}
+          when is_map(response_usage) and is_map(tool_usage) ->
+            updated_usage = Map.put(response_usage, :tool_usage, tool_usage)
+            %{resp | body: %{resp.body | usage: updated_usage}}
+
+          _ ->
+            resp
+        end
+
+      _ ->
+        resp
     end
   end
 

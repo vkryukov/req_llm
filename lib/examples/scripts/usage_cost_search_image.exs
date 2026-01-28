@@ -19,10 +19,11 @@ defmodule UsageCostSearchImage do
     * `--image-aspect-ratio` - Image aspect ratio (e.g. 1:1 or 16:9)
     * `--image-output-format` - Image output format (png, jpeg, webp)
     * `--image-response-format` - Image response format (binary or url)
-    * `--xai-search-mode` - xAI search mode (on, auto, always, never)
-    * `--xai-search-max-sources` - xAI search max sources
-    * `--xai-search-date-range` - xAI search date range (recent, week, month, year)
-    * `--xai-search-citations` - xAI search citations (true or false)
+    * `--xai-web-search` - Enable xAI web search tool (true or false)
+    * `--xai-web-search-allowed-domains` - Comma-separated allowed domains
+    * `--xai-web-search-excluded-domains` - Comma-separated excluded domains
+    * `--xai-web-search-image-understanding` - Enable xAI image understanding in search (true or false)
+    * `--openai-web-search` - Enable OpenAI web search tool (true or false)
     * `--anthropic-search-max-uses` - Anthropic web search max uses
     * `--google-grounding` - Enable Google grounding (true or false)
     * `--log-level` - Log level (debug, info, warning, error)
@@ -32,7 +33,7 @@ defmodule UsageCostSearchImage do
       mix run lib/examples/scripts/usage_cost_search_image.exs
 
       mix run lib/examples/scripts/usage_cost_search_image.exs \\
-        --search-models "xai:grok-4-1-reasoning,google:gemini-3-flash-preview,openai:gpt-5.2,anthropic:claude-sonnet-4-5" \\
+        --search-models "xai:grok-4-1-fast-reasoning,google:gemini-3-flash-preview,openai:gpt-5-mini,anthropic:claude-sonnet-4-5" \\
         --image-models "google:gemini-2.5-flash-image,openai:gpt-image-1.5"
   """
 
@@ -88,22 +89,27 @@ defmodule UsageCostSearchImage do
       type: :string,
       doc: "Image response format (binary or url)"
     ],
-    xai_search_mode: [
-      type: :string,
-      default: "on",
-      doc: "xAI search mode (on, auto, always, never)"
-    ],
-    xai_search_max_sources: [
-      type: :integer,
-      doc: "xAI search max sources"
-    ],
-    xai_search_date_range: [
-      type: :string,
-      doc: "xAI search date range (recent, week, month, year)"
-    ],
-    xai_search_citations: [
+    xai_web_search: [
       type: :boolean,
-      doc: "xAI search citations"
+      default: true,
+      doc: "Enable xAI web search tool"
+    ],
+    xai_web_search_allowed_domains: [
+      type: :string,
+      doc: "Comma-separated allowed domains"
+    ],
+    xai_web_search_excluded_domains: [
+      type: :string,
+      doc: "Comma-separated excluded domains"
+    ],
+    xai_web_search_image_understanding: [
+      type: :boolean,
+      doc: "Enable xAI image understanding in search"
+    ],
+    openai_web_search: [
+      type: :boolean,
+      default: true,
+      doc: "Enable OpenAI web search tool"
     ],
     anthropic_search_max_uses: [
       type: :integer,
@@ -143,10 +149,11 @@ defmodule UsageCostSearchImage do
       image_aspect_ratio: opts[:image_aspect_ratio],
       image_output_format: opts[:image_output_format],
       image_response_format: opts[:image_response_format],
-      xai_search_mode: opts[:xai_search_mode],
-      xai_search_max_sources: opts[:xai_search_max_sources],
-      xai_search_date_range: opts[:xai_search_date_range],
-      xai_search_citations: opts[:xai_search_citations],
+      xai_web_search: opts[:xai_web_search],
+      xai_web_search_allowed_domains: opts[:xai_web_search_allowed_domains],
+      xai_web_search_excluded_domains: opts[:xai_web_search_excluded_domains],
+      xai_web_search_image_understanding: opts[:xai_web_search_image_understanding],
+      openai_web_search: opts[:openai_web_search],
       anthropic_search_max_uses: opts[:anthropic_search_max_uses],
       google_grounding: opts[:google_grounding]
     )
@@ -170,7 +177,7 @@ defmodule UsageCostSearchImage do
     [
       "xai:grok-4-1-fast-reasoning",
       "google:gemini-3-flash-preview",
-      "openai:gpt-5.2",
+      "openai:gpt-5-mini",
       "anthropic:claude-sonnet-4-5"
     ]
   end
@@ -214,14 +221,14 @@ defmodule UsageCostSearchImage do
       |> Helpers.maybe_put(:max_tokens, opts[:max_tokens])
       |> Helpers.maybe_put(:temperature, opts[:temperature])
 
-    {provider_opts, notice} = search_provider_options(model_spec, opts)
+    {provider_opts, extra_opts, notice} = search_provider_options(model_spec, opts)
 
     if notice do
       IO.puts("\nNOTICE | #{model_spec}")
       IO.puts(notice)
     end
 
-    generation_opts = merge_provider_options(base_opts, provider_opts)
+    generation_opts = merge_generation_opts(base_opts, provider_opts, extra_opts)
 
     {result, duration_ms} =
       Helpers.time(fn -> ReqLLM.generate_text(model_spec, context, generation_opts) end)
@@ -232,42 +239,99 @@ defmodule UsageCostSearchImage do
   defp search_provider_options(model_spec, opts) do
     case provider_from_spec(model_spec) do
       :xai ->
-        params = build_xai_search_parameters(opts)
+        tools = build_xai_web_search_tools(opts)
 
-        if is_map(params) do
-          {[search_parameters: params], nil}
+        if tools == [] do
+          {[], [], "xAI web search disabled; running without search configuration."}
         else
-          {[], "xAI search parameters missing; running without search configuration."}
+          {[], [xai_tools: tools], nil}
         end
 
       :google ->
         if opts[:google_grounding] do
-          {[google_grounding: %{enable: true}], nil}
+          {[google_grounding: %{enable: true}], [], nil}
         else
-          {[], "Google grounding disabled; running without search configuration."}
+          {[], [], "Google grounding disabled; running without search configuration."}
         end
 
       :anthropic ->
-        {[web_search: %{max_uses: opts[:anthropic_search_max_uses]}], nil}
+        {[web_search: %{max_uses: opts[:anthropic_search_max_uses]}], [], nil}
 
       :openai ->
-        {[], "OpenAI provider has no built-in web search option in this script."}
+        case ReqLLM.model(model_spec) do
+          {:ok, model} ->
+            protocol = get_in(model, [Access.key(:extra, %{}), :wire, :protocol])
+
+            if protocol == "openai_responses" do
+              tools = build_openai_web_search_tools(opts)
+
+              if tools == [] do
+                {[], [], "OpenAI web search disabled; running without search configuration."}
+              else
+                {[], [tools: tools], nil}
+              end
+            else
+              {[], [],
+               "OpenAI web search requires Responses API models; running without search configuration."}
+            end
+
+          _ ->
+            {[], [], "OpenAI model metadata unavailable; running without search configuration."}
+        end
 
       _ ->
-        {[], "No search configuration available for this provider."}
+        {[], [], "No search configuration available for this provider."}
     end
   end
 
-  defp build_xai_search_parameters(opts) do
-    params =
-      %{}
-      |> maybe_put_map(:mode, opts[:xai_search_mode])
-      |> maybe_put_map(:max_sources, opts[:xai_search_max_sources])
-      |> maybe_put_map(:date_range, opts[:xai_search_date_range])
-      |> maybe_put_map(:citations, opts[:xai_search_citations])
+  defp build_xai_web_search_tools(opts) do
+    if opts[:xai_web_search] == false do
+      []
+    else
+      tool =
+        %{type: "web_search"}
+        |> maybe_put_map(:allowed_domains, parse_csv_list(opts[:xai_web_search_allowed_domains]))
+        |> maybe_put_map(
+          :excluded_domains,
+          parse_csv_list(opts[:xai_web_search_excluded_domains])
+        )
+        |> maybe_put_map(:enable_image_understanding, opts[:xai_web_search_image_understanding])
 
-    if map_size(params) != 0, do: params
+      [tool]
+    end
   end
+
+  defp build_openai_web_search_tools(opts) do
+    if opts[:openai_web_search] == false do
+      []
+    else
+      [%{"type" => "web_search"}]
+    end
+  end
+
+  defp merge_generation_opts(opts, provider_opts, extra_opts) do
+    opts
+    |> merge_provider_options(provider_opts)
+    |> Keyword.merge(extra_opts, fn
+      :tools, left, right when is_list(left) and is_list(right) -> left ++ right
+      _key, _left, right -> right
+    end)
+  end
+
+  defp parse_csv_list(nil), do: nil
+
+  defp parse_csv_list(values) when is_binary(values) do
+    values
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> case do
+      [] -> nil
+      list -> list
+    end
+  end
+
+  defp parse_csv_list(other), do: other
 
   defp provider_from_spec(model_spec) when is_binary(model_spec) do
     case String.split(model_spec, ":", parts: 2) do
