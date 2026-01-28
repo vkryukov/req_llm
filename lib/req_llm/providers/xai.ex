@@ -116,7 +116,7 @@ defmodule ReqLLM.Providers.XAI do
     search_parameters: [
       type: :map,
       doc:
-        "Deprecated Live Search configuration. Use xai_tools with %{type: \"web_search\"} instead."
+        "Deprecated search parameters configuration. Use xai_tools with %{type: \"web_search\"} instead."
     ],
     xai_tools: [
       type: {:list, :map},
@@ -661,6 +661,12 @@ defmodule ReqLLM.Providers.XAI do
   defp split_xai_tools(nil), do: {[], []}
 
   defp split_xai_tools(tools) when is_list(tools) do
+    tools =
+      Enum.reject(tools, fn tool ->
+        tool_type = normalize_tool_type(Map.get(tool, "type") || Map.get(tool, :type))
+        tool_type == "live_search"
+      end)
+
     {xai_tools, other_tools} = Enum.split_with(tools, &xai_tool_entry?/1)
     {normalize_xai_tools(xai_tools), other_tools}
   end
@@ -669,7 +675,7 @@ defmodule ReqLLM.Providers.XAI do
 
   defp xai_tool_entry?(%{} = tool) do
     tool_type = normalize_tool_type(Map.get(tool, "type") || Map.get(tool, :type))
-    tool_type in ["web_search", "x_search", "live_search"]
+    tool_type in ["web_search", "x_search"]
   end
 
   defp xai_tool_entry?(_), do: false
@@ -683,15 +689,24 @@ defmodule ReqLLM.Providers.XAI do
     |> List.wrap()
     |> Enum.filter(&is_map/1)
     |> Enum.map(&normalize_xai_tool/1)
+    |> Enum.reject(&live_search_tool?/1)
   end
+
+  defp live_search_tool?(%{} = tool) do
+    tool_type = normalize_tool_type(Map.get(tool, "type") || Map.get(tool, :type))
+    tool_type == "live_search"
+  end
+
+  defp live_search_tool?(_), do: false
 
   defp normalize_xai_tool(tool) do
     normalized = stringify_keys(tool)
     tool_type = normalize_tool_type(Map.get(normalized, "type"))
 
-    case tool_type do
-      "live_search" -> Map.put(normalized, "type", "web_search")
-      _ -> normalized
+    if is_binary(tool_type) do
+      Map.put(normalized, "type", tool_type)
+    else
+      normalized
     end
   end
 

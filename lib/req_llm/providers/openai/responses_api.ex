@@ -676,9 +676,12 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
   defp encode_tool_for_responses_api(tool_schema) when is_map(tool_schema) do
     tool_type = tool_schema["type"] || tool_schema[:type]
+    tool_type = if is_atom(tool_type), do: Atom.to_string(tool_type), else: tool_type
 
     if tool_type in ["web_search", "web_search_preview", "file_search", "mcp"] do
-      stringify_keys(tool_schema)
+      tool_schema
+      |> stringify_keys()
+      |> Map.put("type", tool_type)
     else
       function_def = tool_schema["function"] || tool_schema[:function]
 
