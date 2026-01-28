@@ -241,6 +241,35 @@ Examples:
     -m anthropic:claude-3-5-haiku-20241022
 ```
 
+### Usage & Cost
+
+#### `usage_cost_search_image.exs` - Search and image cost metadata
+Runs image generation and search-enabled text requests, then prints usage metadata and cost fields.
+
+```bash
+mix run lib/examples/scripts/usage_cost_search_image.exs [options]
+
+Options:
+  --search-models MODELS          Comma-separated search model specs
+  --image-models MODELS           Comma-separated image model specs
+  --search-prompt PROMPT          Prompt for search requests
+  --image-prompt PROMPT           Prompt for image generation
+  --system-prompt PROMPT          System prompt for search requests
+  --max-tokens TOKENS             Maximum tokens for search requests
+  --temperature TEMP              Sampling temperature for search requests
+  --image-size SIZE               Image size (e.g. 1024x1024)
+  --image-aspect-ratio RATIO       Image aspect ratio (e.g. 1:1 or 16:9)
+  --image-output-format FORMAT     png, jpeg, webp
+  --image-response-format FORMAT   binary or url
+  --log-level, -l LEVEL            Output verbosity
+
+Examples:
+  mix run lib/examples/scripts/usage_cost_search_image.exs
+
+  mix run lib/examples/scripts/usage_cost_search_image.exs \
+    --search-prompt "Use web search to find two recent AI product launches."
+```
+
 ### Multimodal
 
 #### `multimodal_image_analysis.exs` - Vision/image analysis

@@ -184,6 +184,8 @@ response.usage
 
 A telemetry event `[:req_llm, :token_usage]` is published on every request with token counts and calculated costs.
 
+See `lib/examples/scripts/usage_cost_search_image.exs` for a multi-provider smoke test that validates search tool and image generation cost metadata.
+
 ## Streaming Configuration
 
 ReqLLM uses Finch for streaming connections with automatic connection pooling. By default, we use HTTP/1-only pools to work around a known Finch bug with large request bodies:
