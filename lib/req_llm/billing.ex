@@ -44,11 +44,15 @@ defmodule ReqLLM.Billing do
             {:ok, count, cost, kind} ->
               updated_totals = Map.update!(totals_acc, kind, &Float.round(&1 + cost, 6))
 
+              component_value = Component.id_string(component) || component.id
+
               item = %{
                 id: component.id,
                 count: count,
                 cost: cost,
-                kind: kind
+                kind: kind,
+                component: component_value,
+                quantity: count
               }
 
               {[item | items], updated_totals}

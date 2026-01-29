@@ -184,9 +184,9 @@ For detailed billing analysis, `line_items` provides per-component costs:
 ```elixir
 response.usage.cost.line_items
 #=> [
-#     %{component: "input_tokens", cost: 0.0003, quantity: 100},
-#     %{component: "output_tokens", cost: 0.0007, quantity: 50},
-#     %{component: "web_search", cost: 0.02, quantity: 2}
+#     %{component: "token.input", cost: 0.0003, quantity: 100},
+#     %{component: "token.output", cost: 0.0007, quantity: 50},
+#     %{component: "tool.web_search", cost: 0.02, quantity: 2}
 #   ]
 ```
 

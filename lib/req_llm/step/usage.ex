@@ -22,7 +22,7 @@ defmodule ReqLLM.Step.Usage do
   * Metadata: `%{model: %LLMDB.Model{}}`
   """
 
-  alias ReqLLM.MapAccess
+  alias ReqLLM.Usage.Cost
 
   @event [:req_llm, :token_usage]
 
@@ -55,7 +55,7 @@ defmodule ReqLLM.Step.Usage do
     with {:ok, model} <- fetch_model(req),
          provider_module = provider_module_from_model(model),
          {:ok, usage} <- extract_usage(resp.body, provider_module, model),
-         {:ok, cost_breakdown} <- compute_cost_breakdown(usage, model) do
+         {:ok, cost_breakdown} <- Cost.breakdown(usage, model) do
       total_cost = cost_breakdown && cost_breakdown.total_cost
       meta = %{tokens: usage, cost: total_cost}
 
@@ -91,7 +91,7 @@ defmodule ReqLLM.Step.Usage do
               |> Map.put(:cache_creation_tokens, cache_creation_tokens)
               |> Map.put(:tool_usage, usage.tool_usage)
               |> Map.put(:image_usage, usage.image_usage)
-              |> maybe_merge_cost(cost_breakdown)
+              |> Cost.merge(cost_breakdown)
 
             updated_body = %{resp.body | usage: augmented_usage}
             %{resp | body: updated_body}
@@ -167,52 +167,5 @@ defmodule ReqLLM.Step.Usage do
       %LLMDB.Model{} = model -> {:ok, model}
       _ -> :error
     end
-  end
-
-  @spec compute_cost_breakdown(map(), LLMDB.Model.t()) ::
-          {:ok,
-           %{
-             input_cost: float(),
-             output_cost: float(),
-             total_cost: float(),
-             cost: map()
-           }
-           | nil}
-  defp compute_cost_breakdown(usage, %LLMDB.Model{} = model) do
-    if usage_tokens_numeric?(usage) do
-      case ReqLLM.Billing.calculate(usage, model) do
-        {:ok, nil} ->
-          {:ok, nil}
-
-        {:ok, cost} ->
-          {:ok,
-           %{
-             input_cost: cost.input_cost,
-             output_cost: cost.output_cost,
-             total_cost: cost.total,
-             cost: cost
-           }}
-      end
-    else
-      {:ok, nil}
-    end
-  end
-
-  defp usage_tokens_numeric?(usage) do
-    input = MapAccess.get(usage, :input_tokens) || MapAccess.get(usage, "input_tokens")
-    output = MapAccess.get(usage, :output_tokens) || MapAccess.get(usage, "output_tokens")
-    total = MapAccess.get(usage, :total_tokens) || MapAccess.get(usage, "total_tokens")
-
-    is_number(input) and is_number(output) and (total == nil or is_number(total))
-  end
-
-  defp maybe_merge_cost(usage, nil), do: usage
-
-  defp maybe_merge_cost(usage, cost_breakdown) do
-    usage
-    |> Map.put(:cost, cost_breakdown.cost)
-    |> Map.put(:input_cost, cost_breakdown.input_cost)
-    |> Map.put(:output_cost, cost_breakdown.output_cost)
-    |> Map.put(:total_cost, cost_breakdown.total_cost)
   end
 end

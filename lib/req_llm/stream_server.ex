@@ -903,38 +903,8 @@ defmodule ReqLLM.StreamServer do
   defp normalize_streaming_usage(usage, model) when is_map(usage) do
     usage
     |> ReqLLM.Usage.Normalize.normalize()
-    |> add_cost_calculation_if_available(usage)
-    |> calculate_cost_if_model_available(model)
+    |> ReqLLM.Usage.Cost.apply(model, original_usage: usage, preserve_total_cost: true)
   end
 
   defp normalize_streaming_usage(usage, _model), do: usage
-
-  defp add_cost_calculation_if_available(normalized_usage, original_usage) do
-    case original_usage do
-      %{total_cost: cost} when is_number(cost) ->
-        Map.put(normalized_usage, :total_cost, cost)
-
-      %{"total_cost" => cost} when is_number(cost) ->
-        Map.put(normalized_usage, :total_cost, cost)
-
-      _ ->
-        normalized_usage
-    end
-  end
-
-  defp calculate_cost_if_model_available(usage, %LLMDB.Model{} = model) do
-    case ReqLLM.Billing.calculate(usage, model) do
-      {:ok, nil} ->
-        usage
-
-      {:ok, cost} ->
-        usage
-        |> Map.put(:cost, cost)
-        |> Map.put_new(:total_cost, cost.total)
-        |> Map.put(:input_cost, cost.input_cost)
-        |> Map.put(:output_cost, cost.output_cost)
-    end
-  end
-
-  defp calculate_cost_if_model_available(usage, _), do: usage
 end
