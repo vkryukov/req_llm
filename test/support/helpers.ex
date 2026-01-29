@@ -37,6 +37,45 @@ defmodule ReqLLM.Test.Helpers do
   end
 
   @doc """
+  Build pricing components from a legacy cost map for tests.
+  """
+  def pricing_from_cost(nil), do: %{components: []}
+
+  def pricing_from_cost(cost_map) when is_map(cost_map) do
+    %{
+      components:
+        []
+        |> maybe_add_pricing_component("token.input", cost_map, [:input, "input"])
+        |> maybe_add_pricing_component("token.output", cost_map, [:output, "output"])
+        |> maybe_add_pricing_component("token.cache_read", cost_map, [
+          :cache_read,
+          "cache_read",
+          :cached_input,
+          "cached_input"
+        ])
+        |> maybe_add_pricing_component("token.cache_write", cost_map, [
+          :cache_write,
+          "cache_write"
+        ])
+        |> maybe_add_pricing_component("token.reasoning", cost_map, [:reasoning, "reasoning"])
+    }
+  end
+
+  def pricing_from_cost(_), do: %{components: []}
+
+  @doc """
+  Calculate cost using ReqLLM.Billing from a raw usage map.
+  """
+  def billing_cost(model, usage) do
+    {:ok, cost} =
+      usage
+      |> ReqLLM.Usage.Normalize.normalize()
+      |> ReqLLM.Billing.calculate(model)
+
+    cost
+  end
+
+  @doc """
   Create an OpenAI-format JSON response fixture for unit tests.
 
   Compatible with OpenAI, Groq, and other OpenAI-compatible providers.
@@ -171,6 +210,22 @@ defmodule ReqLLM.Test.Helpers do
     end
 
     :ok
+  end
+
+  defp maybe_add_pricing_component(components, id, cost_map, keys) do
+    rate =
+      Enum.find_value(keys, fn key ->
+        case Map.fetch(cost_map, key) do
+          {:ok, value} when is_number(value) -> value
+          _ -> nil
+        end
+      end)
+
+    if is_number(rate) do
+      components ++ [%{id: id, kind: "token", unit: "token", per: 1_000_000, rate: rate}]
+    else
+      components
+    end
   end
 
   defp assert_response_structure(response) do

@@ -1,6 +1,8 @@
 defmodule ReqLLM.Step.UsageTest do
   use ExUnit.Case, async: true
 
+  import ReqLLM.Test.Helpers
+
   alias ReqLLM.Step.Usage
 
   # Shared helpers
@@ -44,55 +46,6 @@ defmodule ReqLLM.Step.UsageTest do
 
     on_exit(fn -> :telemetry.detach(handler_id) end)
     {:ok, test_pid: test_pid}
-  end
-
-  defp pricing_from_cost(nil), do: %{components: []}
-
-  defp pricing_from_cost(cost_map) when is_map(cost_map) do
-    %{
-      components:
-        []
-        |> maybe_add_pricing_component("token.input", cost_map, [:input, "input"])
-        |> maybe_add_pricing_component("token.output", cost_map, [:output, "output"])
-        |> maybe_add_pricing_component("token.cache_read", cost_map, [
-          :cache_read,
-          "cache_read",
-          :cached_input,
-          "cached_input"
-        ])
-        |> maybe_add_pricing_component("token.cache_write", cost_map, [
-          :cache_write,
-          "cache_write"
-        ])
-        |> maybe_add_pricing_component("token.reasoning", cost_map, [:reasoning, "reasoning"])
-    }
-  end
-
-  defp pricing_from_cost(_), do: %{components: []}
-
-  defp maybe_add_pricing_component(components, id, cost_map, keys) do
-    rate =
-      Enum.find_value(keys, fn key ->
-        case Map.fetch(cost_map, key) do
-          {:ok, value} when is_number(value) -> value
-          _ -> nil
-        end
-      end)
-
-    if is_number(rate) do
-      components ++ [%{id: id, kind: "token", unit: "token", per: 1_000_000, rate: rate}]
-    else
-      components
-    end
-  end
-
-  defp billing_cost(model, usage) do
-    {:ok, cost} =
-      usage
-      |> ReqLLM.Usage.Normalize.normalize()
-      |> ReqLLM.Billing.calculate(model)
-
-    cost
   end
 
   describe "attach/2" do
