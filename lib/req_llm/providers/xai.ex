@@ -103,8 +103,7 @@ defmodule ReqLLM.Providers.XAI do
 
   use ReqLLM.Provider.Defaults
 
-  import ReqLLM.Provider.Utils,
-    only: [maybe_put: 3, maybe_put_skip: 4, ensure_parsed_body: 1, stringify_keys: 1]
+  import ReqLLM.Provider.Utils, only: [ensure_parsed_body: 1, stringify_keys: 1]
 
   @provider_schema [
     max_completion_tokens: [
@@ -792,14 +791,25 @@ defmodule ReqLLM.Providers.XAI do
 
     enhanced_body =
       body
-      |> maybe_put(:max_completion_tokens, request.options[:max_completion_tokens])
-      |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
-      |> maybe_put_skip(:parallel_tool_calls, request.options[:parallel_tool_calls], [true])
-      |> maybe_put(:stream_options, request.options[:stream_options])
-      |> maybe_put(:tools, tools)
+      |> maybe_put_string("max_completion_tokens", request.options[:max_completion_tokens])
+      |> maybe_put_string("reasoning_effort", request.options[:reasoning_effort])
+      |> maybe_put_skip_string("parallel_tool_calls", request.options[:parallel_tool_calls], [true])
+      |> maybe_put_string("stream_options", request.options[:stream_options])
+      |> maybe_put_string("tools", tools)
 
     encoded_body = Jason.encode!(enhanced_body)
     Map.put(request, :body, encoded_body)
+  end
+
+  defp maybe_put_string(map, _key, nil), do: map
+  defp maybe_put_string(map, key, value) when is_binary(key), do: Map.put(map, key, value)
+
+  defp maybe_put_skip_string(map, key, value, skip_values) do
+    if is_nil(value) or value in skip_values do
+      map
+    else
+      maybe_put_string(map, key, value)
+    end
   end
 
   defp encode_responses_body(request) do
