@@ -126,9 +126,7 @@ defmodule ReqLLM.StreamServer.StreamingTest do
 
       start_time = :os.system_time(:millisecond)
 
-      catch_exit do
-        StreamServer.next(server, 50)
-      end
+      catch_exit(StreamServer.next(server, 50))
 
       elapsed = :os.system_time(:millisecond) - start_time
 
@@ -144,9 +142,7 @@ defmodule ReqLLM.StreamServer.StreamingTest do
 
       start_time = :os.system_time(:millisecond)
 
-      catch_exit do
-        StreamServer.await_metadata(server, 50)
-      end
+      catch_exit(StreamServer.await_metadata(server, 50))
 
       elapsed = :os.system_time(:millisecond) - start_time
 

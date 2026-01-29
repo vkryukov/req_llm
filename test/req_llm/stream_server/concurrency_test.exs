@@ -126,9 +126,7 @@ defmodule ReqLLM.StreamServer.ConcurrencyTest do
 
       timeout_task =
         Task.async(fn ->
-          catch_exit do
-            StreamServer.next(server, 50)
-          end
+          catch_exit(StreamServer.next(server, 50))
         end)
 
       :timer.sleep(1200)
