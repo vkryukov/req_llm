@@ -74,8 +74,6 @@ defmodule ReqLLM.Provider.Defaults do
 
   import ReqLLM.Provider.Utils, only: [maybe_put: 3, ensure_parsed_body: 1]
 
-  require Logger
-
   @doc """
   Provides default implementations for common provider patterns.
 

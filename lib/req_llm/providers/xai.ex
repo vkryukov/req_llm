@@ -106,8 +106,6 @@ defmodule ReqLLM.Providers.XAI do
   import ReqLLM.Provider.Utils,
     only: [maybe_put: 3, maybe_put_skip: 4, ensure_parsed_body: 1, stringify_keys: 1]
 
-  require Logger
-
   @provider_schema [
     max_completion_tokens: [
       type: :integer,

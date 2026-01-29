@@ -8,8 +8,6 @@ defmodule ReqLLM.Response.Stream do
 
   alias ReqLLM.{Message, Response, StreamChunk}
 
-  require Logger
-
   @typedoc """
   Summary of accumulated stream data.
 

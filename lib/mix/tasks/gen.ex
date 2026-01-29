@@ -139,8 +139,6 @@ defmodule Mix.Tasks.ReqLlm.Gen do
   """
   use Mix.Task
 
-  require Logger
-
   @preferred_cli_env ["req_llm.gen": :dev]
   @log_levels [:warning, :info, :debug]
 

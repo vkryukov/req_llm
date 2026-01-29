@@ -298,8 +298,6 @@ defmodule ReqLLM.Providers.AmazonBedrock do
       case aws_creds do
         %{region: r} when is_binary(r) -> r
         %{region: _} -> "us-east-1"
-        %AWSAuth.Credentials{region: r} when is_binary(r) -> r
-        %AWSAuth.Credentials{} -> "us-east-1"
         _ -> "us-east-1"
       end
 

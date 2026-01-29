@@ -13,8 +13,6 @@ defmodule ReqLLM.Generation do
 
   alias ReqLLM.Response
 
-  require Logger
-
   @doc """
   Returns the base generation options schema.
 

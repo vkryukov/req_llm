@@ -6,8 +6,6 @@ defmodule ReqLLM.Scripts.Helpers do
   logging, timing, error handling, and multimodal content processing.
   """
 
-  require Logger
-
   @doc """
   Ensures the application is started.
 

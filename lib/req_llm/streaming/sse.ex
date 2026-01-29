@@ -37,8 +37,6 @@ defmodule ReqLLM.Streaming.SSE do
 
   """
 
-  require Logger
-
   @doc """
   Accumulate HTTP chunks and parse complete SSE events.
 

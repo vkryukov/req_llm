@@ -132,8 +132,8 @@ defmodule ReqLLM.Providers.AmazonBedrock.AWSEventStream do
 
       if byte_size(rest) >= total_needed and body_length >= 0 do
         <<
-          headers::binary-size(headers_length),
-          body::binary-size(body_length),
+          headers::binary-size(^headers_length),
+          body::binary-size(^body_length),
           message_crc::32,
           remaining::binary
         >> = rest
@@ -196,7 +196,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.AWSEventStream do
     # Each header is: name_len(1) + name + value_type(1) + value_len(2) + value
     case data do
       <<name_len::8, rest::binary>> when byte_size(rest) >= name_len ->
-        <<name::binary-size(name_len), value_type::8, rest2::binary>> = rest
+        <<name::binary-size(^name_len), value_type::8, rest2::binary>> = rest
 
         case value_type do
           # String type (7)
@@ -204,7 +204,7 @@ defmodule ReqLLM.Providers.AmazonBedrock.AWSEventStream do
             <<value_len::16-big, rest3::binary>> = rest2
 
             if byte_size(rest3) >= value_len do
-              <<value::binary-size(value_len), remaining::binary>> = rest3
+              <<value::binary-size(^value_len), remaining::binary>> = rest3
               parse_header_pairs(remaining, Map.put(acc, name, value))
             else
               acc
