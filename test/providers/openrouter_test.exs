@@ -130,6 +130,7 @@ defmodule ReqLLM.Providers.OpenRouterTest do
       updated_request = OpenRouter.encode_body(mock_request)
 
       assert is_binary(updated_request.body)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["model"] == "openai/gpt-4"
@@ -167,6 +168,7 @@ defmodule ReqLLM.Providers.OpenRouterTest do
       }
 
       updated_request = OpenRouter.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])
@@ -204,6 +206,7 @@ defmodule ReqLLM.Providers.OpenRouterTest do
       }
 
       updated_request = OpenRouter.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])
@@ -212,6 +215,26 @@ defmodule ReqLLM.Providers.OpenRouterTest do
                "type" => "function",
                "function" => %{"name" => "specific_tool"}
              }
+    end
+
+    test "encode_body with streaming includes stream_options without duplicates" do
+      {:ok, model} = ReqLLM.model("openrouter:openai/gpt-4")
+      context = context_fixture()
+
+      mock_request = %Req.Request{
+        options: [
+          context: context,
+          model: model.model,
+          stream: true
+        ]
+      }
+
+      updated_request = OpenRouter.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
+      decoded = Jason.decode!(updated_request.body)
+
+      assert decoded["stream"] == true
+      assert decoded["stream_options"] == %{"include_usage" => true}
     end
 
     test "encode_body with response_format" do

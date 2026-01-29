@@ -70,7 +70,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
       assert is_map(body)
-      assert Map.has_key?(body, "messages")
+      assert Map.has_key?(body, :messages)
     end
   end
 
@@ -89,7 +89,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      tool_schema = hd(body["tools"])
+      tool_schema = hd(body[:tools])
       refute Map.has_key?(tool_schema["function"], "strict")
     end
 
@@ -108,7 +108,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
       tool = %{tool | strict: true}
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      tool_schema = hd(body["tools"])
+      tool_schema = hd(body[:tools])
       assert tool_schema["function"]["strict"] == true
     end
   end
@@ -241,7 +241,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      tool_params = hd(body["tools"])["function"]["parameters"]
+      tool_params = hd(body[:tools])["function"]["parameters"]
       assert tool_params["type"] == "object"
       assert tool_params["properties"]["location"]["type"] == "string"
     end
@@ -479,7 +479,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      tool_params = hd(body["tools"])["function"]["parameters"]
+      tool_params = hd(body[:tools])["function"]["parameters"]
       assert tool_params["properties"]["filter"]["oneOf"]
       assert tool_params["properties"]["timestamp"]["format"] == "date-time"
     end
@@ -507,7 +507,7 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      tool_schema = hd(body["tools"])
+      tool_schema = hd(body[:tools])
       assert tool_schema["function"]["strict"] == true
     end
 
@@ -579,8 +579,8 @@ defmodule ReqLLM.Providers.Azure.StructuredOutputTest do
 
       map_body = Azure.OpenAI.format_request("gpt-4o", context, tools: [map_tool], stream: false)
 
-      kw_params = hd(kw_body["tools"])["function"]["parameters"]
-      map_params = hd(map_body["tools"])["function"]["parameters"]
+      kw_params = hd(kw_body[:tools])["function"]["parameters"]
+      map_params = hd(map_body[:tools])["function"]["parameters"]
 
       assert kw_params == map_params
     end

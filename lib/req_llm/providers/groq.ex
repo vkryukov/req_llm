@@ -132,7 +132,7 @@ defmodule ReqLLM.Providers.Groq do
   end
 
   @doc """
-  Custom body encoding that adds Groq-specific extensions to the default OpenAI-compatible format.
+  Custom body building that adds Groq-specific extensions to the default OpenAI-compatible format.
 
   Adds support for:
   - service_tier (auto, on_demand, flex, performance)
@@ -143,22 +143,15 @@ defmodule ReqLLM.Providers.Groq do
   - logit_bias (in addition to standard options)
   """
   @impl ReqLLM.Provider
-  def encode_body(request) do
-    request = ReqLLM.Provider.Defaults.default_encode_body(request)
-    body = Jason.decode!(request.body)
-
-    enhanced_body =
-      body
-      |> translate_tool_choice_format()
-      |> maybe_put_skip(:service_tier, request.options[:service_tier], ["auto"])
-      |> maybe_put_skip(:reasoning_effort, request.options[:reasoning_effort], ["default"])
-      |> maybe_put(:reasoning_format, request.options[:reasoning_format])
-      |> maybe_put(:search_settings, request.options[:search_settings])
-      |> maybe_put(:compound_custom, request.options[:compound_custom])
-      |> maybe_put(:logit_bias, request.options[:logit_bias])
-
-    encoded_body = Jason.encode!(enhanced_body)
-    Map.put(request, :body, encoded_body)
+  def build_body(request) do
+    ReqLLM.Provider.Defaults.default_build_body(request)
+    |> translate_tool_choice_format()
+    |> maybe_put_skip(:service_tier, request.options[:service_tier], ["auto"])
+    |> maybe_put_skip(:reasoning_effort, request.options[:reasoning_effort], ["default"])
+    |> maybe_put(:reasoning_format, request.options[:reasoning_format])
+    |> maybe_put(:search_settings, request.options[:search_settings])
+    |> maybe_put(:compound_custom, request.options[:compound_custom])
+    |> maybe_put(:logit_bias, request.options[:logit_bias])
   end
 
   defp translate_tool_choice_format(body) do

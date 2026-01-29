@@ -240,6 +240,7 @@ defmodule ReqLLM.Providers.VeniceTest do
       }
 
       updated_request = Venice.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["model"] == "venice-uncensored"
@@ -265,6 +266,7 @@ defmodule ReqLLM.Providers.VeniceTest do
       }
 
       updated_request = Venice.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert Map.has_key?(decoded, "venice_parameters")
@@ -291,6 +293,7 @@ defmodule ReqLLM.Providers.VeniceTest do
       }
 
       updated_request = Venice.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       venice_params = decoded["venice_parameters"]
@@ -323,6 +326,7 @@ defmodule ReqLLM.Providers.VeniceTest do
       }
 
       updated_request = Venice.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])

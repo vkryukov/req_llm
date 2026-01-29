@@ -30,6 +30,7 @@ defmodule ReqLLM.Provider.Defaults do
 
   - `prepare_request/4` - Standard chat/object/embedding request preparation
   - `attach/3` - OAuth Bearer authentication and standard pipeline steps
+  - `build_body/1` - OpenAI-compatible request body construction
   - `encode_body/1` - OpenAI-compatible request body encoding
   - `decode_response/1` - Standard response decoding with error handling
   - `extract_usage/2` - Usage extraction from standard `usage` field
@@ -47,6 +48,7 @@ defmodule ReqLLM.Provider.Defaults do
   - `prepare_object_request/4`
   - `prepare_embedding_request/4`
   - `default_attach/3`
+  - `default_build_body/1`
   - `default_encode_body/1`
   - `default_decode_response/1`
   - `default_extract_usage/2`
@@ -58,17 +60,23 @@ defmodule ReqLLM.Provider.Defaults do
   ## Customization Examples
 
       # Override just the body encoding while keeping everything else
+      def build_body(request) do
+        request
+        |> ReqLLM.Provider.Defaults.default_build_body()
+        |> Map.put(:my_provider_field, request.options[:my_provider_field])
+      end
+
       def encode_body(request) do
         request
-        |> ReqLLM.Provider.Defaults.default_encode_body()
+        |> ReqLLM.Provider.Defaults.encode_body_from_map(build_body(request))
         |> add_custom_headers()
       end
 
       # Use runtime functions directly for testing
       test "encoding produces correct format" do
         request = build_test_request()
-        encoded = ReqLLM.Provider.Defaults.default_encode_body(request)
-        assert encoded.body =~ ~s("model":")
+        body = ReqLLM.Provider.Defaults.default_build_body(request)
+        assert body[:model]
       end
   """
 
@@ -109,7 +117,18 @@ defmodule ReqLLM.Provider.Defaults do
       """
       @impl ReqLLM.Provider
       def encode_body(request) do
-        ReqLLM.Provider.Defaults.default_encode_body(request)
+        body = build_body(request)
+        ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
+      end
+
+      @doc """
+      Default implementation of build_body/1.
+
+      Builds request body using OpenAI-compatible format for chat and embedding operations.
+      """
+      @impl ReqLLM.Provider
+      def build_body(request) do
+        ReqLLM.Provider.Defaults.default_build_body(request)
       end
 
       @doc """
@@ -171,6 +190,7 @@ defmodule ReqLLM.Provider.Defaults do
       # Make all default implementations overridable
       defoverridable prepare_request: 4,
                      attach: 3,
+                     build_body: 1,
                      encode_body: 1,
                      decode_response: 1,
                      extract_usage: 2,
@@ -423,25 +443,38 @@ defmodule ReqLLM.Provider.Defaults do
   """
   @spec default_encode_body(Req.Request.t()) :: Req.Request.t()
   def default_encode_body(request) do
-    body =
-      case request.options[:operation] do
-        :embedding ->
-          encode_embedding_body(request)
+    body = default_build_body(request)
 
-        _ ->
-          encode_chat_body(request)
-      end
+    encode_body_from_map(request, body)
+  end
 
-    try do
-      encoded_body = Jason.encode!(body)
+  @doc """
+  Default body building for OpenAI-compatible APIs.
+  """
+  @spec default_build_body(Req.Request.t()) :: map()
+  def default_build_body(request) do
+    case request.options[:operation] do
+      :embedding ->
+        encode_embedding_body(request)
 
-      request
-      |> Req.Request.put_header("content-type", "application/json")
-      |> Map.put(:body, encoded_body)
-    rescue
-      error ->
-        reraise error, __STACKTRACE__
+      _ ->
+        encode_chat_body(request)
     end
+  end
+
+  @doc """
+  Encode a request body map as JSON and attach it to the Req request.
+  """
+  @spec encode_body_from_map(Req.Request.t(), map()) :: Req.Request.t()
+  def encode_body_from_map(request, body) do
+    encoded_body = Jason.encode!(body)
+
+    request
+    |> Req.Request.put_header("content-type", "application/json")
+    |> Map.put(:body, encoded_body)
+  rescue
+    error ->
+      reraise error, __STACKTRACE__
   end
 
   @doc """

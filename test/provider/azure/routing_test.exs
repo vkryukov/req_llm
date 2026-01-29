@@ -287,9 +287,9 @@ defmodule ReqLLM.Providers.Azure.RoutingTest do
       body = Azure.OpenAI.format_request("gpt-4o", context, stream: false)
 
       refute Map.has_key?(body, "model")
-      assert Map.has_key?(body, "messages")
-      assert is_list(body["messages"])
-      assert hd(body["messages"])["role"] == "user"
+      assert Map.has_key?(body, :messages)
+      assert is_list(body[:messages])
+      assert hd(body[:messages])[:role] == "user"
     end
 
     test "applies correct formatter for Claude models (model field, atom keys)" do

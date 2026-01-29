@@ -38,19 +38,19 @@ defmodule ReqLLM.Providers.Cerebras do
 
   @impl ReqLLM.Provider
   def encode_body(request) do
-    request = ReqLLM.Provider.Defaults.default_encode_body(request)
-    body = Jason.decode!(request.body)
+    body = build_body(request)
+    ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
+  end
+
+  @impl ReqLLM.Provider
+  def build_body(request) do
     model = request.private[:req_llm_model]
 
-    enhanced_body =
-      body
-      |> translate_tool_choice_format()
-      |> add_strict_to_tools(model)
-      |> normalize_tool_choice()
-      |> normalize_assistant_content()
-
-    encoded_body = Jason.encode!(enhanced_body)
-    Map.put(request, :body, encoded_body)
+    ReqLLM.Provider.Defaults.default_build_body(request)
+    |> translate_tool_choice_format()
+    |> add_strict_to_tools(model)
+    |> normalize_tool_choice()
+    |> normalize_assistant_content()
   end
 
   defp translate_tool_choice_format(body) do

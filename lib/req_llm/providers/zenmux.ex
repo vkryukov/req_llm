@@ -176,11 +176,14 @@ defmodule ReqLLM.Providers.Zenmux do
   """
   @impl ReqLLM.Provider
   def encode_body(request) do
-    request = ReqLLM.Provider.Defaults.default_encode_body(request)
+    body = build_body(request)
+    ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
+  end
 
-    body = Jason.decode!(request.body)
+  @impl ReqLLM.Provider
+  def build_body(request) do
+    body = ReqLLM.Provider.Defaults.default_build_body(request)
 
-    # Ensure tool_choice is present from options if not in body (in case default dropped it)
     tool_choice_opt =
       cond do
         is_map(request.options) -> Map.get(request.options, :tool_choice)
@@ -189,29 +192,22 @@ defmodule ReqLLM.Providers.Zenmux do
       end
 
     body =
-      if !Map.has_key?(body, "tool_choice") and !Map.has_key?(body, :tool_choice) and
-           tool_choice_opt do
-        Map.put(body, "tool_choice", tool_choice_opt)
+      if !Map.has_key?(body, :tool_choice) and tool_choice_opt do
+        Map.put(body, :tool_choice, tool_choice_opt)
       else
         body
       end
 
-    enhanced_body =
-      body
-      |> translate_tool_choice_format()
-      |> maybe_put(:max_completion_tokens, request.options[:max_completion_tokens])
-      |> maybe_put(:provider, request.options[:provider])
-      |> maybe_put(:model_routing_config, request.options[:model_routing_config])
-      |> maybe_put(:reasoning, request.options[:reasoning])
-      |> maybe_put(:web_search_options, request.options[:web_search_options])
-      |> maybe_put(:verbosity, request.options[:verbosity])
-      |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
-      |> add_stream_options(request.options)
-
-    encoded_body = Jason.encode!(enhanced_body)
-    request = Map.put(request, :body, encoded_body)
-
-    request
+    body
+    |> translate_tool_choice_format()
+    |> maybe_put(:max_completion_tokens, request.options[:max_completion_tokens])
+    |> maybe_put(:provider, request.options[:provider])
+    |> maybe_put(:model_routing_config, request.options[:model_routing_config])
+    |> maybe_put(:reasoning, request.options[:reasoning])
+    |> maybe_put(:web_search_options, request.options[:web_search_options])
+    |> maybe_put(:verbosity, request.options[:verbosity])
+    |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
+    |> add_stream_options(request.options)
   end
 
   defp add_stream_options(body, request_options) do

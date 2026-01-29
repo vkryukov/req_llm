@@ -81,6 +81,7 @@ defmodule ReqLLM.Providers.ZenmuxTest do
       }
 
       updated_request = Zenmux.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["model"] == "xiaomi/mimo-v2-flash"
@@ -139,6 +140,7 @@ defmodule ReqLLM.Providers.ZenmuxTest do
       }
 
       updated_request = Zenmux.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["provider"] == %{"routing" => %{"type" => "priority"}}
@@ -159,6 +161,7 @@ defmodule ReqLLM.Providers.ZenmuxTest do
       }
 
       updated_request = Zenmux.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["stream_options"] == %{"include_usage" => true}

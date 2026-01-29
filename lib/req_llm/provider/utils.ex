@@ -144,6 +144,25 @@ defmodule ReqLLM.Provider.Utils do
     end)
   end
 
+  @doc """
+  Recursively converts map keys to strings.
+  """
+  @spec stringify_keys_deep(term()) :: term()
+  def stringify_keys_deep(%_{} = struct), do: struct
+
+  def stringify_keys_deep(map) when is_map(map) do
+    Map.new(map, fn {k, v} ->
+      key = if is_atom(k), do: Atom.to_string(k), else: k
+      {key, stringify_keys_deep(v)}
+    end)
+  end
+
+  def stringify_keys_deep(list) when is_list(list) do
+    Enum.map(list, &stringify_keys_deep/1)
+  end
+
+  def stringify_keys_deep(value), do: value
+
   @sensitive_query_params ~w(key api_key apikey access_token token)
 
   @doc """

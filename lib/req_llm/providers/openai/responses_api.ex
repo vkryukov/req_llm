@@ -64,13 +64,16 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
   @impl true
   def encode_body(request) do
+    body = build_body(request)
+    Map.put(request, :body, Jason.encode!(body))
+  end
+
+  def build_body(request) do
     context = request.options[:context] || %ReqLLM.Context{messages: []}
     model_name = request.options[:model] || request.options[:id]
     opts = request.options
 
-    body = build_request_body(context, model_name, opts, request)
-
-    Map.put(request, :body, Jason.encode!(body))
+    build_request_body(context, model_name, opts, request)
   end
 
   @impl true

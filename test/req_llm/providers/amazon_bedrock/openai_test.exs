@@ -15,11 +15,11 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
         )
 
       # Should have standard OpenAI format
-      assert formatted["messages"]
-      assert is_list(formatted["messages"])
+      assert formatted[:messages]
+      assert is_list(formatted[:messages])
 
       # Should include model field (unlike Anthropic which rejects it)
-      assert formatted["model"] == "openai.gpt-oss-20b-1:0"
+      assert formatted[:model] == "openai.gpt-oss-20b-1:0"
     end
 
     test "includes system message when present" do
@@ -36,10 +36,10 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
           []
         )
 
-      messages = formatted["messages"]
+      messages = formatted[:messages]
       assert length(messages) == 2
-      assert List.first(messages)["role"] == "system"
-      assert List.first(messages)["content"] == "You are a helpful assistant"
+      assert List.first(messages)[:role] == "system"
+      assert List.first(messages)[:content] == "You are a helpful assistant"
     end
 
     test "includes optional parameters when provided" do
@@ -54,9 +54,9 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
           top_p: 0.9
         )
 
-      assert formatted["max_tokens"] == 2048
-      assert formatted["temperature"] == 0.7
-      assert formatted["top_p"] == 0.9
+      assert formatted[:max_tokens] == 2048
+      assert formatted[:temperature] == 0.7
+      assert formatted[:top_p] == 0.9
     end
 
     test "includes tools when provided" do
@@ -80,10 +80,10 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
           []
         )
 
-      assert is_list(formatted["tools"])
-      assert length(formatted["tools"]) == 1
+      assert is_list(formatted[:tools])
+      assert length(formatted[:tools]) == 1
 
-      tool = List.first(formatted["tools"])
+      tool = List.first(formatted[:tools])
       assert tool["type"] == "function"
       assert tool["function"]["name"] == "get_weather"
     end
@@ -283,10 +283,10 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
         )
 
       # Should include tools array with structured_output tool
-      assert is_list(formatted["tools"])
-      assert length(formatted["tools"]) == 1
+      assert is_list(formatted[:tools])
+      assert length(formatted[:tools]) == 1
 
-      tool = List.first(formatted["tools"])
+      tool = List.first(formatted[:tools])
       assert tool["type"] == "function"
       assert tool["function"]["name"] == "structured_output"
 
@@ -302,8 +302,8 @@ defmodule ReqLLM.Providers.AmazonBedrock.OpenAITest do
       assert tool["function"]["parameters"]["required"] == ["name", "age"]
 
       # Should force tool choice
-      assert formatted["tool_choice"]["type"] == "function"
-      assert formatted["tool_choice"]["function"]["name"] == "structured_output"
+      assert formatted[:tool_choice][:type] == "function"
+      assert formatted[:tool_choice][:function][:name] == "structured_output"
     end
 
     test "parse_response extracts object from tool call for :object operation" do

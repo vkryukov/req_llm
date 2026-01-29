@@ -130,6 +130,7 @@ defmodule ReqLLM.Providers.GroqTest do
       updated_request = Groq.encode_body(mock_request)
 
       assert is_binary(updated_request.body)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["model"] == "llama-3.1-8b-instant"
@@ -167,6 +168,7 @@ defmodule ReqLLM.Providers.GroqTest do
       }
 
       updated_request = Groq.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])
@@ -204,6 +206,7 @@ defmodule ReqLLM.Providers.GroqTest do
       }
 
       updated_request = Groq.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])

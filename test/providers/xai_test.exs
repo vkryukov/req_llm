@@ -499,6 +499,7 @@ defmodule ReqLLM.Providers.XAITest do
       }
 
       updated_request = XAI.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["model"] == "grok-3"
@@ -530,6 +531,7 @@ defmodule ReqLLM.Providers.XAITest do
       }
 
       updated_request = XAI.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert is_list(decoded["tools"])
@@ -550,6 +552,7 @@ defmodule ReqLLM.Providers.XAITest do
       }
 
       updated_request = XAI.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["response_format"] == %{"type" => "json_object"}
@@ -571,6 +574,7 @@ defmodule ReqLLM.Providers.XAITest do
       }
 
       updated_request = XAI.encode_body(mock_request)
+      assert_no_duplicate_json_keys(updated_request.body)
       decoded = Jason.decode!(updated_request.body)
 
       assert decoded["parallel_tool_calls"] == false

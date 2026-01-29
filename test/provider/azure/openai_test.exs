@@ -25,8 +25,8 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      refute Map.has_key?(body, "model")
-      assert Map.has_key?(body, "messages")
+      refute Map.has_key?(body, :model)
+      assert Map.has_key?(body, :messages)
     end
 
     test "includes messages in correct format" do
@@ -35,7 +35,7 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert [%{"role" => "user", "content" => "Hello world"}] = body["messages"]
+      assert [%{role: "user", content: "Hello world"}] = body[:messages]
     end
 
     test "includes stream_options when streaming" do
@@ -44,8 +44,8 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["stream"] == true
-      assert body["stream_options"] == %{"include_usage" => true}
+      assert body[:stream] == true
+      assert body[:stream_options] == %{include_usage: true}
     end
 
     test "includes temperature and other options" do
@@ -54,7 +54,7 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["temperature"] == 0.7
+      assert body[:temperature] == 0.7
       assert body[:max_tokens] == 100
     end
 
@@ -73,8 +73,8 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert length(body["tools"]) == 1
-      assert hd(body["tools"])["function"]["name"] == "get_weather"
+      assert length(body[:tools]) == 1
+      assert hd(body[:tools])["function"]["name"] == "get_weather"
     end
 
     test "uses max_completion_tokens for reasoning models" do
@@ -117,9 +117,9 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["tool_choice"] == %{
-               "type" => "function",
-               "function" => %{"name" => "get_weather"}
+      assert body[:tool_choice] == %{
+               type: "function",
+               function: %{name: "get_weather"}
              }
     end
 
@@ -138,7 +138,7 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["tool_choice"] == "auto"
+      assert body[:tool_choice] == :auto
     end
 
     test "includes tool_choice none" do
@@ -156,7 +156,7 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["tool_choice"] == "none"
+      assert body[:tool_choice] == :none
     end
 
     test "includes tool_choice required" do
@@ -174,7 +174,7 @@ defmodule ReqLLM.Providers.Azure.OpenAITest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, opts)
 
-      assert body["tool_choice"] == "required"
+      assert body[:tool_choice] == :required
     end
 
     test "includes service_tier when specified" do

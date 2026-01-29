@@ -42,8 +42,7 @@ defmodule ReqLLM.Providers.Azure.ResponsesAPI do
       }
     }
 
-    encoded_request = ResponsesAPI.encode_body(fake_request)
-    Jason.decode!(encoded_request.body)
+    ResponsesAPI.build_body(fake_request)
   end
 
   @doc """

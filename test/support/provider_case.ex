@@ -151,6 +151,30 @@ defmodule ReqLLM.ProviderCase do
   end
 
   @doc """
+  Assert that JSON has no duplicate top-level keys.
+  """
+  def assert_no_duplicate_json_keys(json) when is_binary(json) do
+    decoded = Jason.decode!(json, objects: :ordered_objects)
+
+    keys =
+      case decoded do
+        %Jason.OrderedObject{values: values} -> Enum.map(values, fn {k, _} -> k end)
+        map when is_map(map) -> Map.keys(map)
+        _ -> []
+      end
+
+    duplicates =
+      keys
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_k, v} -> v > 1 end)
+      |> Enum.map(fn {k, _} -> k end)
+
+    assert duplicates == [], "Duplicate JSON keys: #{inspect(duplicates)}"
+
+    json
+  end
+
+  @doc """
   Assert that a response has the expected basic structure and context merging.
 
   Verifies:

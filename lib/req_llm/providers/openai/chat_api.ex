@@ -60,7 +60,7 @@ defmodule ReqLLM.Providers.OpenAI.ChatAPI do
       component: :provider
     )
 
-    Map.put(request, :body, Jason.encode!(enhanced_body))
+    ReqLLM.Provider.Defaults.encode_body_from_map(request, enhanced_body)
   end
 
   @impl true
@@ -95,13 +95,7 @@ defmodule ReqLLM.Providers.OpenAI.ChatAPI do
         Map.new([model: model_name, context: context, operation: operation] ++ opts)
       )
 
-    request = ReqLLM.Provider.Defaults.default_encode_body(temp_request)
-
-    body =
-      case request.body do
-        "" -> %{}
-        json_string when is_binary(json_string) -> Jason.decode!(json_string)
-      end
+    body = ReqLLM.Provider.Defaults.default_build_body(temp_request)
 
     # Convert opts to map for helper functions that expect request.options
     opts_map = if is_list(opts), do: Map.new(opts), else: opts
@@ -165,7 +159,9 @@ defmodule ReqLLM.Providers.OpenAI.ChatAPI do
   end
 
   defp add_token_limits(body, model_name, request_options) do
-    body = Map.delete(body, "max_tokens") |> Map.delete("max_completion_tokens")
+    body =
+      body
+      |> Map.drop([:max_tokens, :max_completion_tokens, "max_tokens", "max_completion_tokens"])
 
     if reasoning_model_name?(model_name) do
       maybe_put(

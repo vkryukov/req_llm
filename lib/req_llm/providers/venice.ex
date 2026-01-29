@@ -138,17 +138,16 @@ defmodule ReqLLM.Providers.Venice do
 
   @impl ReqLLM.Provider
   def encode_body(request) do
-    request = ReqLLM.Provider.Defaults.default_encode_body(request)
-    body = Jason.decode!(request.body)
+    body = build_body(request)
+    ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
+  end
 
+  @impl ReqLLM.Provider
+  def build_body(request) do
     venice_params = request.options[:venice_parameters]
 
-    enhanced_body =
-      body
-      |> maybe_put(:venice_parameters, encode_venice_parameters(venice_params))
-
-    encoded_body = Jason.encode!(enhanced_body)
-    Map.put(request, :body, encoded_body)
+    ReqLLM.Provider.Defaults.default_build_body(request)
+    |> maybe_put(:venice_parameters, encode_venice_parameters(venice_params))
   end
 
   defp encode_venice_parameters(nil), do: nil

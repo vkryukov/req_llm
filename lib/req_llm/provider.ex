@@ -11,6 +11,7 @@ defmodule ReqLLM.Provider do
   - **Request Preparation**: Configure operation-specific requests via `prepare_request/4`
   - **Request Configuration**: Set headers, base URLs, authentication via `attach/3`
   - **Body Encoding**: Transform Context to provider-specific JSON via `encode_body/1`
+  - **Body Construction**: Build request body maps via `build_body/1` (optional)
   - **Response Parsing**: Decode API responses via `decode_response/1`
   - **Usage Extraction**: Parse usage/cost data via `extract_usage/2` (optional)
   - **Streaming Configuration**: Build complete streaming requests via `attach_stream/4` (recommended)
@@ -165,6 +166,7 @@ defmodule ReqLLM.Provider do
 
   """
   @callback encode_body(Req.Request.t()) :: Req.Request.t()
+  @callback build_body(Req.Request.t()) :: map()
 
   @doc """
   Decodes provider API response.
@@ -601,6 +603,7 @@ defmodule ReqLLM.Provider do
     extract_usage: 2,
     default_env_key: 0,
     translate_options: 3,
+    build_body: 1,
     decode_stream_event: 2,
     decode_stream_event: 3,
     init_stream_state: 1,

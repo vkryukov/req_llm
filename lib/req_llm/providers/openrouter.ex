@@ -243,37 +243,28 @@ defmodule ReqLLM.Providers.OpenRouter do
   """
   @impl ReqLLM.Provider
   def encode_body(request) do
-    # Start with default encoding
-    request = ReqLLM.Provider.Defaults.default_encode_body(request)
+    body = build_body(request)
+    request = ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
+    maybe_add_attribution_headers(request, request.options)
+  end
 
-    # Parse the encoded body to add OpenRouter-specific options
-    body = Jason.decode!(request.body)
-
-    enhanced_body =
-      body
-      |> translate_tool_choice_format()
-      |> encode_reasoning_details_in_messages()
-      |> maybe_put(:models, request.options[:openrouter_models])
-      |> maybe_put(:route, request.options[:openrouter_route])
-      |> maybe_put(:provider, request.options[:openrouter_provider])
-      |> maybe_put(:transforms, request.options[:openrouter_transforms])
-      |> maybe_put(:top_k, request.options[:openrouter_top_k])
-      |> maybe_put(:repetition_penalty, request.options[:openrouter_repetition_penalty])
-      |> maybe_put(:min_p, request.options[:openrouter_min_p])
-      |> maybe_put(:top_a, request.options[:openrouter_top_a])
-      |> maybe_put(:top_logprobs, request.options[:openrouter_top_logprobs])
-      |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
-      |> add_openrouter_specific_options(request.options)
-      |> add_stream_options(request.options)
-
-    # Re-encode with OpenRouter extensions
-    encoded_body = Jason.encode!(enhanced_body)
-    request = Map.put(request, :body, encoded_body)
-
-    # Add OpenRouter app attribution headers
-    request = maybe_add_attribution_headers(request, request.options)
-
-    request
+  @impl ReqLLM.Provider
+  def build_body(request) do
+    ReqLLM.Provider.Defaults.default_build_body(request)
+    |> translate_tool_choice_format()
+    |> encode_reasoning_details_in_messages()
+    |> maybe_put(:models, request.options[:openrouter_models])
+    |> maybe_put(:route, request.options[:openrouter_route])
+    |> maybe_put(:provider, request.options[:openrouter_provider])
+    |> maybe_put(:transforms, request.options[:openrouter_transforms])
+    |> maybe_put(:top_k, request.options[:openrouter_top_k])
+    |> maybe_put(:repetition_penalty, request.options[:openrouter_repetition_penalty])
+    |> maybe_put(:min_p, request.options[:openrouter_min_p])
+    |> maybe_put(:top_a, request.options[:openrouter_top_a])
+    |> maybe_put(:top_logprobs, request.options[:openrouter_top_logprobs])
+    |> maybe_put(:reasoning_effort, request.options[:reasoning_effort])
+    |> add_openrouter_specific_options(request.options)
+    |> add_stream_options(request.options)
   end
 
   # Helper function for adding OpenRouter-specific body options not covered by defaults
@@ -459,6 +450,12 @@ defmodule ReqLLM.Providers.OpenRouter do
     }
   end
 
+  defp encode_reasoning_details_in_messages(%{messages: messages} = body)
+       when is_list(messages) do
+    updated_messages = Enum.map(messages, &encode_message_reasoning_details/1)
+    Map.put(body, :messages, updated_messages)
+  end
+
   defp encode_reasoning_details_in_messages(%{"messages" => messages} = body)
        when is_list(messages) do
     updated_messages = Enum.map(messages, &encode_message_reasoning_details/1)
@@ -466,6 +463,20 @@ defmodule ReqLLM.Providers.OpenRouter do
   end
 
   defp encode_reasoning_details_in_messages(body), do: body
+
+  defp encode_message_reasoning_details(%{reasoning_details: details} = message)
+       when is_list(details) and details != [] do
+    encoded_details =
+      details
+      |> Enum.map(&encode_single_reasoning_detail/1)
+      |> Enum.reject(&is_nil/1)
+
+    if encoded_details == [] do
+      Map.delete(message, :reasoning_details)
+    else
+      Map.put(message, :reasoning_details, encoded_details)
+    end
+  end
 
   defp encode_message_reasoning_details(%{"reasoning_details" => details} = message)
        when is_list(details) and details != [] do

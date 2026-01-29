@@ -33,10 +33,10 @@ defmodule ReqLLM.Providers.Azure.ToolsTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, stream: false)
 
-      assert body["messages"]
-      user_message = hd(body["messages"])
-      assert user_message["role"] == "user"
-      assert is_list(user_message["content"])
+      assert body[:messages]
+      user_message = hd(body[:messages])
+      assert user_message[:role] == "user"
+      assert is_list(user_message[:content])
     end
 
     test "Claude formatter handles image content parts" do
@@ -105,9 +105,9 @@ defmodule ReqLLM.Providers.Azure.ToolsTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, stream: true)
 
-      assert body["stream"] == true
-      assert body["stream_options"] == %{"include_usage" => true}
-      assert is_list(body["messages"])
+      assert body[:stream] == true
+      assert body[:stream_options] == %{include_usage: true}
+      assert is_list(body[:messages])
     end
 
     test "Claude formatter includes stream option with multi-modal content" do
@@ -147,10 +147,10 @@ defmodule ReqLLM.Providers.Azure.ToolsTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, stream: false)
 
-      assert length(body["messages"]) == 2
-      tool_msg = Enum.at(body["messages"], 1)
-      assert tool_msg["role"] == "tool"
-      assert tool_msg["tool_call_id"] == "call_123"
+      assert length(body[:messages]) == 2
+      tool_msg = Enum.at(body[:messages], 1)
+      assert tool_msg[:role] == "tool"
+      assert tool_msg[:tool_call_id] == "call_123"
     end
 
     test "Claude: formats tool result message in context" do
@@ -202,10 +202,10 @@ defmodule ReqLLM.Providers.Azure.ToolsTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, tools: [tool], stream: false)
 
-      messages = body["messages"]
+      messages = body[:messages]
       assert length(messages) >= 2
 
-      roles = Enum.map(messages, & &1["role"])
+      roles = Enum.map(messages, & &1[:role])
       assert "user" in roles
       assert "tool" in roles or "assistant" in roles
     end
@@ -223,8 +223,8 @@ defmodule ReqLLM.Providers.Azure.ToolsTest do
 
       body = Azure.OpenAI.format_request("gpt-4o", context, stream: false)
 
-      messages = body["messages"]
-      tool_msgs = Enum.filter(messages, &(&1["role"] == "tool"))
+      messages = body[:messages]
+      tool_msgs = Enum.filter(messages, &(&1[:role] == "tool"))
       assert length(tool_msgs) == 2
     end
 
