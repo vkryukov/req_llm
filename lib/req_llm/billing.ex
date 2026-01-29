@@ -28,31 +28,9 @@ defmodule ReqLLM.Billing do
       |> Enum.map(&Component.from/1)
 
     if components == [] do
-      token_cost_fallback(usage, Map.get(model, :cost))
+      {:ok, nil}
     else
       {:ok, compute_costs(usage, components)}
-    end
-  end
-
-  defp token_cost_fallback(_usage, nil), do: {:ok, nil}
-
-  defp token_cost_fallback(usage, cost_map) when is_map(cost_map) do
-    case ReqLLM.Cost.calculate(usage, cost_map) do
-      {:ok, nil} ->
-        {:ok, nil}
-
-      {:ok, breakdown} ->
-        {:ok,
-         %{
-           tokens: breakdown.total_cost,
-           tools: 0.0,
-           images: 0.0,
-           storage: 0.0,
-           total: breakdown.total_cost,
-           line_items: [],
-           input_cost: breakdown.input_cost,
-           output_cost: breakdown.output_cost
-         }}
     end
   end
 

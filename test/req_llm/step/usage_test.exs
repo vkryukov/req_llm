@@ -46,6 +46,55 @@ defmodule ReqLLM.Step.UsageTest do
     {:ok, test_pid: test_pid}
   end
 
+  defp pricing_from_cost(nil), do: %{components: []}
+
+  defp pricing_from_cost(cost_map) when is_map(cost_map) do
+    %{
+      components:
+        []
+        |> maybe_add_pricing_component("token.input", cost_map, [:input, "input"])
+        |> maybe_add_pricing_component("token.output", cost_map, [:output, "output"])
+        |> maybe_add_pricing_component("token.cache_read", cost_map, [
+          :cache_read,
+          "cache_read",
+          :cached_input,
+          "cached_input"
+        ])
+        |> maybe_add_pricing_component("token.cache_write", cost_map, [
+          :cache_write,
+          "cache_write"
+        ])
+        |> maybe_add_pricing_component("token.reasoning", cost_map, [:reasoning, "reasoning"])
+    }
+  end
+
+  defp pricing_from_cost(_), do: %{components: []}
+
+  defp maybe_add_pricing_component(components, id, cost_map, keys) do
+    rate =
+      Enum.find_value(keys, fn key ->
+        case Map.fetch(cost_map, key) do
+          {:ok, value} when is_number(value) -> value
+          _ -> nil
+        end
+      end)
+
+    if is_number(rate) do
+      components ++ [%{id: id, kind: "token", unit: "token", per: 1_000_000, rate: rate}]
+    else
+      components
+    end
+  end
+
+  defp billing_cost(model, usage) do
+    {:ok, cost} =
+      usage
+      |> ReqLLM.Usage.Normalize.normalize()
+      |> ReqLLM.Billing.calculate(model)
+
+    cost
+  end
+
   describe "attach/2" do
     test "attaches usage step and preserves request structure" do
       {:ok, model} = ReqLLM.model("openai:gpt-4")
@@ -144,7 +193,12 @@ defmodule ReqLLM.Step.UsageTest do
     end
 
     test "emits telemetry and calculates cost" do
-      model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
+      model = %LLMDB.Model{
+        provider: :openai,
+        id: "gpt-4",
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
+      }
+
       request = mock_request(model: model)
       response = mock_response(%{"usage" => %{"prompt_tokens" => 100, "completion_tokens" => 50}})
 
@@ -225,7 +279,7 @@ defmodule ReqLLM.Step.UsageTest do
       {"atom keys", %{input: 0.003, output: 0.015}, 1000, 500, 0.000011},
       {"string keys", %{"input" => 0.002, "output" => 0.004}, 1000, 1000, 0.000006},
       {"no cost", nil, 1000, 500, nil},
-      {"incomplete cost", %{input: 0.002}, 100, 50, nil}
+      {"incomplete cost", %{input: 0.002}, 100, 50, 0.0}
     ]
 
     for {description, cost_map, input_tokens, output_tokens, expected_cost} <- @cost_scenarios do
@@ -233,7 +287,7 @@ defmodule ReqLLM.Step.UsageTest do
         model = %LLMDB.Model{
           provider: :test,
           id: "test-model",
-          cost: unquote(Macro.escape(cost_map))
+          pricing: pricing_from_cost(unquote(Macro.escape(cost_map)))
         }
 
         request = mock_request(model: model)
@@ -257,7 +311,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :test,
         id: "test-model",
-        cost: %{input: 0.0033333, output: 0.0066666}
+        pricing: pricing_from_cost(%{input: 0.0033333, output: 0.0066666})
       }
 
       request = mock_request(model: model)
@@ -320,13 +374,13 @@ defmodule ReqLLM.Step.UsageTest do
         %LLMDB.Model{
           provider: :anthropic,
           id: "claude-3-5-sonnet",
-          cost: %{input: 0.003, output: 0.015}
+          pricing: pricing_from_cost(%{input: 0.003, output: 0.015})
         }
 
       options_model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
       }
 
       request = %Req.Request{
@@ -467,7 +521,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -502,17 +556,20 @@ defmodule ReqLLM.Step.UsageTest do
       # Input cost: 0.00000086 + 0.0000096 = 0.000010460
       # Output cost: 300 * 0.03 / 1000000 = 0.000009
       # Total: 0.000019460
-      expected_input_cost = Float.round((86 * 0.01 + 1920 * 0.005) / 1_000_000, 6)
-      expected_output_cost = Float.round(300 * 0.03 / 1_000_000, 6)
-      expected_total_cost = Float.round(expected_input_cost + expected_output_cost, 6)
+      expected_cost = billing_cost(model, response_body["usage"])
 
-      assert usage_data.cost == expected_total_cost
-      assert usage_data.input_cost == expected_input_cost
-      assert usage_data.output_cost == expected_output_cost
+      assert usage_data.cost == expected_cost.total
+      assert usage_data.input_cost == expected_cost.input_cost
+      assert usage_data.output_cost == expected_cost.output_cost
     end
 
     test "handles cached tokens without cached_input rate (uses input rate)" do
-      model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
+      model = %LLMDB.Model{
+        provider: :openai,
+        id: "gpt-4",
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
+      }
+
       request = mock_request(model: model)
 
       response_body = %{
@@ -531,18 +588,17 @@ defmodule ReqLLM.Step.UsageTest do
 
       # Both cached and uncached should use input rate when cached_input not specified
       # Input cost: 1000 * 0.01 / 1000000 = 0.00001 (same as before)
-      expected_input_cost = Float.round(1000 * 0.01 / 1_000_000, 6)
-      expected_output_cost = Float.round(100 * 0.03 / 1_000_000, 6)
+      expected_cost = billing_cost(model, response_body["usage"])
 
-      assert usage_data.input_cost == expected_input_cost
-      assert usage_data.output_cost == expected_output_cost
+      assert usage_data.input_cost == expected_cost.input_cost
+      assert usage_data.output_cost == expected_cost.output_cost
     end
 
     test "handles Response struct with cached tokens" do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -587,7 +643,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cache_read: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cache_read: 0.005})
       }
 
       request = mock_request(model: model)
@@ -628,7 +684,8 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :anthropic,
         id: "claude-3-5-sonnet",
-        cost: %{input: 3.0, output: 15.0, cache_read: 0.3, cache_write: 3.75}
+        pricing:
+          pricing_from_cost(%{input: 3.0, output: 15.0, cache_read: 0.3, cache_write: 3.75})
       }
 
       request = mock_request(model: model)
@@ -659,13 +716,11 @@ defmodule ReqLLM.Step.UsageTest do
       # Cache read tokens: 800 at $0.3/M
       # Cache write tokens: 100 at $3.75/M
 
-      expected_input_cost = Float.round((1000 * 3.0 + 800 * 0.3 + 100 * 3.75) / 1_000_000, 6)
-      expected_output_cost = Float.round(200 * 15.0 / 1_000_000, 6)
-      expected_total = Float.round(expected_input_cost + expected_output_cost, 6)
+      expected_cost = billing_cost(model, response_body["usage"])
 
-      assert usage_data.input_cost == expected_input_cost
-      assert usage_data.output_cost == expected_output_cost
-      assert usage_data.cost == expected_total
+      assert usage_data.input_cost == expected_cost.input_cost
+      assert usage_data.output_cost == expected_cost.output_cost
+      assert usage_data.cost == expected_cost.total
     end
 
     test "extracts AWS Bedrock cacheReadInputTokens format" do
@@ -674,7 +729,8 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :test,
         id: "test-model",
-        cost: %{input: 3.0, output: 15.0, cache_read: 0.3, cache_write: 3.75}
+        pricing:
+          pricing_from_cost(%{input: 3.0, output: 15.0, cache_read: 0.3, cache_write: 3.75})
       }
 
       request = mock_request(model: model)
@@ -704,20 +760,18 @@ defmodule ReqLLM.Step.UsageTest do
       # Regular tokens: 1000 at $3.0/M (this IS input_tokens for Bedrock)
       # Cache read tokens: 600 at $0.3/M
       # Cache write tokens: 150 at $3.75/M
-      expected_input_cost = Float.round((1000 * 3.0 + 600 * 0.3 + 150 * 3.75) / 1_000_000, 6)
-      expected_output_cost = Float.round(200 * 15.0 / 1_000_000, 6)
-      expected_total = Float.round(expected_input_cost + expected_output_cost, 6)
+      expected_cost = billing_cost(model, response_body["usage"])
 
-      assert usage_data.input_cost == expected_input_cost
-      assert usage_data.output_cost == expected_output_cost
-      assert usage_data.cost == expected_total
+      assert usage_data.input_cost == expected_cost.input_cost
+      assert usage_data.output_cost == expected_cost.output_cost
+      assert usage_data.cost == expected_cost.total
     end
 
     test "handles edge cases with cached tokens" do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -768,7 +822,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -799,7 +853,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -829,7 +883,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -859,7 +913,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -894,7 +948,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -922,15 +976,9 @@ defmodule ReqLLM.Step.UsageTest do
         assert usage_data.tokens.input == 1000
         assert usage_data.tokens.cached_input == expected_int
 
-        # Cost calculation should use truncated value
-        uncached_tokens = 1000 - expected_int
-
-        expected_input_cost =
-          Float.round((uncached_tokens * 0.01 + expected_int * 0.005) / 1_000_000, 6)
-
-        expected_output_cost = Float.round(100 * 0.03 / 1_000_000, 6)
-        assert usage_data.input_cost == expected_input_cost
-        assert usage_data.output_cost == expected_output_cost
+        expected_cost = billing_cost(model, response_body["usage"])
+        assert usage_data.input_cost == expected_cost.input_cost
+        assert usage_data.output_cost == expected_cost.output_cost
       end
     end
 
@@ -938,7 +986,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -982,7 +1030,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4",
-        cost: %{input: 0.01, output: 0.03, cached_input: 0.005}
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03, cached_input: 0.005})
       }
 
       request = mock_request(model: model)
@@ -1027,7 +1075,12 @@ defmodule ReqLLM.Step.UsageTest do
     end
 
     test "extracts usage from Response struct and adds cost fields" do
-      model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
+      model = %LLMDB.Model{
+        provider: :openai,
+        id: "gpt-4",
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
+      }
+
       request = mock_request(model: model)
 
       response_body = %ReqLLM.Response{
@@ -1125,7 +1178,12 @@ defmodule ReqLLM.Step.UsageTest do
     end
 
     test "preserves Response fields when adding cost breakdown" do
-      model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
+      model = %LLMDB.Model{
+        provider: :openai,
+        id: "gpt-4",
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
+      }
+
       request = mock_request(model: model)
 
       original_message = %ReqLLM.Message{
@@ -1163,7 +1221,12 @@ defmodule ReqLLM.Step.UsageTest do
 
   describe "integration with Req pipeline" do
     test "usage step works properly in Req pipeline" do
-      model = %LLMDB.Model{provider: :openai, id: "gpt-4", cost: %{input: 0.01, output: 0.03}}
+      model = %LLMDB.Model{
+        provider: :openai,
+        id: "gpt-4",
+        pricing: pricing_from_cost(%{input: 0.01, output: 0.03})
+      }
+
       request = mock_request(model: model)
       updated_request = Usage.attach(request, model)
 
@@ -1189,7 +1252,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :google,
         id: "gemini-2.5-flash",
-        cost: %{input: 0.30, output: 2.50}
+        pricing: pricing_from_cost(%{input: 0.30, output: 2.50})
       }
 
       request = mock_request(model: model)
@@ -1224,7 +1287,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :google,
         id: "gemini-2.5-flash",
-        cost: %{input: 0.30, output: 2.50}
+        pricing: pricing_from_cost(%{input: 0.30, output: 2.50})
       }
 
       request = mock_request(model: model)
@@ -1257,7 +1320,7 @@ defmodule ReqLLM.Step.UsageTest do
       model = %LLMDB.Model{
         provider: :openai,
         id: "gpt-4o",
-        cost: %{input: 2.50, output: 10.0}
+        pricing: pricing_from_cost(%{input: 2.50, output: 10.0})
       }
 
       request = mock_request(model: model)

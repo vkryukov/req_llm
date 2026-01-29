@@ -3,7 +3,7 @@ defmodule ReqLLM.BillingTest do
 
   alias ReqLLM.Billing
 
-  test "falls back to token pricing when components are empty" do
+  test "returns nil when components are empty" do
     model = %LLMDB.Model{
       provider: :test,
       id: "m1",
@@ -18,13 +18,7 @@ defmodule ReqLLM.BillingTest do
       output_tokens: 500_000
     }
 
-    assert {:ok, cost} = Billing.calculate(usage, model)
-    assert cost.tokens == 2.0
-    assert cost.tools == 0.0
-    assert cost.images == 0.0
-    assert cost.total == 2.0
-    assert cost.input_cost == 1.0
-    assert cost.output_cost == 1.0
+    assert {:ok, nil} = Billing.calculate(usage, model)
   end
 
   test "skips components missing per or rate" do
