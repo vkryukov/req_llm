@@ -226,7 +226,6 @@ defmodule ReqLLM.Streaming.FinchClientTest do
 
   describe "authentication header formats" do
     test "documents expected authentication patterns" do
-      # Document the expected authentication header formats for each provider
       auth_patterns = [
         {:openai, "Authorization", "Bearer sk-..."},
         {:anthropic, "x-api-key", "anthropic-key..."},
@@ -241,13 +240,73 @@ defmodule ReqLLM.Streaming.FinchClientTest do
         assert is_binary(header_name)
         assert is_binary(pattern)
 
-        # Anthropic uses x-api-key, others use Authorization Bearer
         case provider do
           :anthropic -> assert header_name == "x-api-key"
           :google -> assert header_name == "x-goog-api-key"
           _ -> assert header_name == "Authorization" and String.starts_with?(pattern, "Bearer ")
         end
       end)
+    end
+  end
+
+  describe "safe_http_event/2 graceful termination handling" do
+    defmodule TerminatingStreamServer do
+      use GenServer
+
+      def start_link(opts \\ []) do
+        GenServer.start_link(__MODULE__, opts)
+      end
+
+      def init(opts), do: {:ok, opts}
+
+      def handle_call({:http_event, _event}, _from, state) do
+        {:reply, :ok, state}
+      end
+    end
+
+    test "handles :noproc when server is already dead" do
+      {:ok, pid} = TerminatingStreamServer.start_link()
+      GenServer.stop(pid)
+
+      Process.sleep(10)
+
+      result =
+        try do
+          ReqLLM.StreamServer.http_event(pid, {:data, "test"})
+        catch
+          :exit, {:noproc, _} -> :caught_noproc
+        end
+
+      assert result == :caught_noproc
+    end
+
+    test "FinchClient callback does not crash when server terminates" do
+      {:ok, stream_server} = TerminatingStreamServer.start_link()
+      {:ok, model} = ReqLLM.model("openai:gpt-4")
+      {:ok, context} = Context.normalize("Test")
+
+      {:ok, task_pid, _http_context, _canonical_json} =
+        FinchClient.start_stream(
+          ReqLLM.Providers.OpenAI,
+          model,
+          context,
+          [],
+          stream_server
+        )
+
+      GenServer.stop(stream_server)
+      Process.sleep(10)
+
+      ref = Process.monitor(task_pid)
+      Process.unlink(task_pid)
+      Process.exit(task_pid, :kill)
+
+      receive do
+        {:DOWN, ^ref, :process, ^task_pid, reason} ->
+          assert reason == :killed
+      after
+        1000 -> flunk("Task did not terminate")
+      end
     end
   end
 end

@@ -161,19 +161,19 @@ defmodule ReqLLM.Streaming.FinchClient do
       Task.Supervisor.async(ReqLLM.TaskSupervisor, fn ->
         finch_stream_callback = fn
           {:status, status}, acc ->
-            StreamServer.http_event(stream_server_pid, {:status, status})
+            safe_http_event(stream_server_pid, {:status, status})
             acc
 
           {:headers, headers}, acc ->
-            StreamServer.http_event(stream_server_pid, {:headers, headers})
+            safe_http_event(stream_server_pid, {:headers, headers})
             acc
 
           {:data, chunk}, acc ->
-            StreamServer.http_event(stream_server_pid, {:data, chunk})
+            safe_http_event(stream_server_pid, {:data, chunk})
             acc
 
           :done, acc ->
-            StreamServer.http_event(stream_server_pid, :done)
+            safe_http_event(stream_server_pid, :done)
             acc
         end
 
@@ -202,18 +202,18 @@ defmodule ReqLLM.Streaming.FinchClient do
 
             {:error, reason, _partial_acc} ->
               Logger.error("Finch streaming failed: #{inspect(reason)}")
-              StreamServer.http_event(stream_server_pid, {:error, reason})
+              safe_http_event(stream_server_pid, {:error, reason})
               {:error, reason}
           end
         catch
           :exit, reason ->
             Logger.error("Finch streaming task exited: #{inspect(reason)}")
-            StreamServer.http_event(stream_server_pid, {:error, {:exit, reason}})
+            safe_http_event(stream_server_pid, {:error, {:exit, reason}})
             {:error, {:exit, reason}}
 
           kind, reason ->
             Logger.error("Finch streaming task crashed: #{kind} #{inspect(reason)}")
-            StreamServer.http_event(stream_server_pid, {:error, {kind, reason}})
+            safe_http_event(stream_server_pid, {:error, {kind, reason}})
             {:error, {kind, reason}}
         end
       end)
@@ -245,6 +245,15 @@ defmodule ReqLLM.Streaming.FinchClient do
       %{"generationConfig" => %{"thinkingConfig" => _}} -> true
       _ -> false
     end
+  end
+
+  defp safe_http_event(server, event) do
+    StreamServer.http_event(server, event)
+  catch
+    :exit, {:noproc, _} -> :ok
+    :exit, {:normal, _} -> :ok
+    :exit, {:shutdown, _} -> :ok
+    :exit, {{:shutdown, _}, _} -> :ok
   end
 
   # Validate that HTTP/2 pools won't fail with large request bodies
