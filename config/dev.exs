@@ -1,12 +1,4 @@
 import Config
 
-config :git_hooks,
-  auto_install: false,
-  verbose: true,
-  hooks: [
-    pre_push: [
-      tasks: [
-        {:mix_task, :format, ["--check-formatted"]}
-      ]
-    ]
-  ]
+# Dev-specific configuration goes here
+# Git hooks are configured in config.exs

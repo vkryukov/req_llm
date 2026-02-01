@@ -1,5 +1,7 @@
 # Image Generation
 
+> **Interactive Demo:** Try the [Image Generation Livebook](image-generation.livemd) to compare image generation across OpenAI, xAI, and Google in parallel.
+
 ## Overview
 
 ReqLLM provides image generation through the `ReqLLM.generate_image/3` function, which works similarly to `ReqLLM.generate_text/3`. The key difference is that the response contains image data instead of text.

@@ -184,6 +184,70 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   @impl ReqLLM.Provider
+  def prepare_request(:image, model_spec, prompt_or_messages, opts) do
+    with {:ok, model} <- ReqLLM.model(model_spec),
+         {:ok, context, prompt} <- image_context(prompt_or_messages, opts),
+         opts_with_context = Keyword.put(opts, :context, context),
+         http_opts = Keyword.get(opts, :req_http_options, []),
+         Process.put(:req_llm_xai_image_explicit_opts, MapSet.new(Keyword.keys(opts))),
+         {:ok, processed_opts} <-
+           ReqLLM.Provider.Options.process(__MODULE__, :image, model, opts_with_context) do
+      api_mod = ReqLLM.Providers.XAI.ImagesAPI
+      path = api_mod.path()
+
+      req_keys =
+        supported_provider_options() ++
+          [
+            :context,
+            :operation,
+            :model,
+            :prompt,
+            :n,
+            :aspect_ratio,
+            :response_format,
+            :user,
+            :provider_options,
+            :req_http_options,
+            :api_mod,
+            :base_url
+          ]
+
+      timeout =
+        Keyword.get(
+          processed_opts,
+          :receive_timeout,
+          Application.get_env(:req_llm, :image_receive_timeout, 120_000)
+        )
+
+      request =
+        Req.new(
+          [
+            url: path,
+            method: :post,
+            receive_timeout: timeout,
+            pool_timeout: timeout,
+            connect_options: [timeout: timeout]
+          ] ++ http_opts
+        )
+        |> Req.Request.register_options(req_keys)
+        |> Req.Request.merge_options(
+          Keyword.take(processed_opts, req_keys) ++
+            [
+              operation: :image,
+              model: model.id,
+              prompt: prompt,
+              context: context,
+              base_url: Keyword.get(processed_opts, :base_url, default_base_url()),
+              api_mod: api_mod
+            ]
+        )
+        |> attach(model, processed_opts)
+
+      {:ok, request}
+    end
+  end
+
+  @impl ReqLLM.Provider
   def prepare_request(operation, model_spec, input, opts) do
     ReqLLM.Provider.Defaults.prepare_request(__MODULE__, operation, model_spec, input, opts)
   end
@@ -224,6 +288,53 @@ defmodule ReqLLM.Providers.XAI do
         |> attach(model, processed_opts)
 
       {:ok, request}
+    end
+  end
+
+  defp image_context(prompt_or_messages, opts) do
+    context_result =
+      case Keyword.get(opts, :context) do
+        %ReqLLM.Context{} = context -> {:ok, context}
+        _ -> ReqLLM.Context.normalize(prompt_or_messages, opts)
+      end
+
+    with {:ok, context} <- context_result,
+         {:ok, prompt} <- extract_image_prompt(context) do
+      {:ok, context, prompt}
+    end
+  end
+
+  defp extract_image_prompt(%ReqLLM.Context{messages: messages}) do
+    last_user =
+      messages
+      |> Enum.reverse()
+      |> Enum.find(&(&1.role == :user))
+
+    prompt =
+      case last_user do
+        nil ->
+          ""
+
+        %ReqLLM.Message{content: content} when is_list(content) ->
+          content
+          |> Enum.filter(&(&1.type == :text))
+          |> Enum.map_join("", & &1.text)
+
+        %ReqLLM.Message{content: content} when is_binary(content) ->
+          content
+
+        _ ->
+          ""
+      end
+      |> String.trim()
+
+    if prompt == "" do
+      {:error,
+       ReqLLM.Error.Invalid.Parameter.exception(
+         parameter: "image generation requires a non-empty user text prompt"
+       )}
+    else
+      {:ok, prompt}
     end
   end
 
@@ -594,6 +705,12 @@ defmodule ReqLLM.Providers.XAI do
   end
 
   @impl ReqLLM.Provider
+  def translate_options(:image, _model, opts) do
+    explicit_keys = Process.delete(:req_llm_xai_image_explicit_opts) || MapSet.new()
+    {opts, warnings} = drop_image_unsupported(opts, explicit_keys)
+    {opts, Enum.reverse(warnings)}
+  end
+
   def translate_options(_operation, model, opts) do
     warnings = []
 
@@ -671,6 +788,25 @@ defmodule ReqLLM.Providers.XAI do
       end
 
     {opts, Enum.reverse(warnings)}
+  end
+
+  defp drop_image_unsupported(opts, explicit_keys) do
+    unsupported_params = [:size, :output_format, :quality, :style, :negative_prompt, :seed, :user]
+
+    Enum.reduce(unsupported_params, {opts, []}, fn param, {acc_opts, acc_warnings} ->
+      case Keyword.pop(acc_opts, param) do
+        {nil, remaining_opts} ->
+          {remaining_opts, acc_warnings}
+
+        {_value, remaining_opts} ->
+          if MapSet.member?(explicit_keys, param) do
+            warning = "#{param} is not supported for xAI image generation and will be ignored"
+            {remaining_opts, [warning | acc_warnings]}
+          else
+            {remaining_opts, acc_warnings}
+          end
+      end
+    end)
   end
 
   defp split_xai_tools(nil), do: {[], []}
@@ -801,11 +937,16 @@ defmodule ReqLLM.Providers.XAI do
   """
   @impl ReqLLM.Provider
   def encode_body(request) do
-    case request.options[:xai_api_type] do
-      :responses ->
+    api_mod = request.options[:api_mod]
+
+    cond do
+      api_mod ->
+        api_mod.encode_body(request)
+
+      request.options[:xai_api_type] == :responses ->
         encode_responses_body(request)
 
-      _ ->
+      true ->
         body = build_body(request)
         ReqLLM.Provider.Defaults.encode_body_from_map(request, body)
     end
@@ -903,24 +1044,31 @@ defmodule ReqLLM.Providers.XAI do
   """
   @impl ReqLLM.Provider
   def decode_response({req, resp}) do
-    if req.options[:xai_api_type] == :responses do
-      raw_body = resp.body
+    api_mod = req.options[:api_mod]
 
-      case ReqLLM.Providers.OpenAI.ResponsesAPI.decode_response({req, resp}) do
-        {req, %Req.Response{} = decoded_resp} ->
-          {req, merge_responses_tool_usage(decoded_resp, raw_body)}
+    cond do
+      api_mod ->
+        api_mod.decode_response({req, resp})
 
-        other ->
-          other
-      end
-    else
-      case resp.status do
-        200 ->
-          decode_success_response(req, resp)
+      req.options[:xai_api_type] == :responses ->
+        raw_body = resp.body
 
-        status ->
-          decode_error_response(req, resp, status)
-      end
+        case ReqLLM.Providers.OpenAI.ResponsesAPI.decode_response({req, resp}) do
+          {req, %Req.Response{} = decoded_resp} ->
+            {req, merge_responses_tool_usage(decoded_resp, raw_body)}
+
+          other ->
+            other
+        end
+
+      true ->
+        case resp.status do
+          200 ->
+            decode_success_response(req, resp)
+
+          status ->
+            decode_error_response(req, resp, status)
+        end
     end
   end
 

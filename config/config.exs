@@ -99,7 +99,7 @@ if System.get_env("REQ_LLM_DEBUG") in ~w(1 true yes on) do
   config :req_llm, :debug, true
 end
 
-# Git hooks and git_ops configuration for conventional commits
+# Git hooks and git_ops for conventional commits (dev only)
 if config_env() == :dev do
   config :git_hooks,
     auto_install: true,
@@ -108,6 +108,11 @@ if config_env() == :dev do
       commit_msg: [
         tasks: [
           {:cmd, "mix git_ops.check_message", include_hook_args: true}
+        ]
+      ],
+      pre_push: [
+        tasks: [
+          {:mix_task, :format, ["--check-formatted"]}
         ]
       ]
     ]
