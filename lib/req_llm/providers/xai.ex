@@ -189,7 +189,7 @@ defmodule ReqLLM.Providers.XAI do
          {:ok, context, prompt} <- image_context(prompt_or_messages, opts),
          opts_with_context = Keyword.put(opts, :context, context),
          http_opts = Keyword.get(opts, :req_http_options, []),
-         _ <- Process.put(:req_llm_xai_image_explicit_opts, MapSet.new(Keyword.keys(opts))),
+         Process.put(:req_llm_xai_image_explicit_opts, MapSet.new(Keyword.keys(opts))),
          {:ok, processed_opts} <-
            ReqLLM.Provider.Options.process(__MODULE__, :image, model, opts_with_context) do
       api_mod = ReqLLM.Providers.XAI.ImagesAPI
