@@ -189,6 +189,7 @@ defmodule ReqLLM.Providers.XAI do
          {:ok, context, prompt} <- image_context(prompt_or_messages, opts),
          opts_with_context = Keyword.put(opts, :context, context),
          http_opts = Keyword.get(opts, :req_http_options, []),
+         _ <- Process.put(:req_llm_xai_image_explicit_opts, MapSet.new(Keyword.keys(opts))),
          {:ok, processed_opts} <-
            ReqLLM.Provider.Options.process(__MODULE__, :image, model, opts_with_context) do
       api_mod = ReqLLM.Providers.XAI.ImagesAPI
@@ -705,7 +706,8 @@ defmodule ReqLLM.Providers.XAI do
 
   @impl ReqLLM.Provider
   def translate_options(:image, _model, opts) do
-    {opts, warnings} = drop_image_unsupported(opts)
+    explicit_keys = Process.delete(:req_llm_xai_image_explicit_opts) || MapSet.new()
+    {opts, warnings} = drop_image_unsupported(opts, explicit_keys)
     {opts, Enum.reverse(warnings)}
   end
 
@@ -788,7 +790,7 @@ defmodule ReqLLM.Providers.XAI do
     {opts, Enum.reverse(warnings)}
   end
 
-  defp drop_image_unsupported(opts) do
+  defp drop_image_unsupported(opts, explicit_keys) do
     unsupported_params = [:size, :output_format, :quality, :style, :negative_prompt, :seed, :user]
 
     Enum.reduce(unsupported_params, {opts, []}, fn param, {acc_opts, acc_warnings} ->
@@ -797,8 +799,12 @@ defmodule ReqLLM.Providers.XAI do
           {remaining_opts, acc_warnings}
 
         {_value, remaining_opts} ->
-          warning = "#{param} is not supported for xAI image generation and will be ignored"
-          {remaining_opts, [warning | acc_warnings]}
+          if MapSet.member?(explicit_keys, param) do
+            warning = "#{param} is not supported for xAI image generation and will be ignored"
+            {remaining_opts, [warning | acc_warnings]}
+          else
+            {remaining_opts, acc_warnings}
+          end
       end
     end)
   end
