@@ -191,3 +191,20 @@ First production-ready release of ReqLLM.
 [1.2.0]: https://github.com/agentjido/req_llm/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/agentjido/req_llm/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/agentjido/req_llm/releases/tag/v1.0.0
+
+<!-- changelog -->
+
+## [v1.5.0](https://github.com/agentjido/req_llm/compare/v1.4.1...v1.5.0) (2026-02-01)
+
+
+
+
+### Features:
+
+* add xAI image generation support (#397) by Victor
+
+* add xai image generation support by Victor
+
+### Bug Fixes:
+
+* remove unsupported-option warnings by Victor
