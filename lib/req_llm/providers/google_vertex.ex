@@ -146,6 +146,15 @@ defmodule ReqLLM.Providers.GoogleVertex do
       type: :map,
       doc:
         "Enable Google Search grounding for Gemini models - allows model to search the web. Set to %{enable: true}."
+    ],
+    dimensions: [
+      type: :pos_integer,
+      doc: "Number of dimensions for the embedding vector (model-dependent, e.g. 768, 1536, 3072)"
+    ],
+    task_type: [
+      type: :string,
+      doc:
+        "Task type for embedding (e.g., RETRIEVAL_QUERY, RETRIEVAL_DOCUMENT, SEMANTIC_SIMILARITY)"
     ]
   ]
 
@@ -167,9 +176,46 @@ defmodule ReqLLM.Providers.GoogleVertex do
 
   @impl ReqLLM.Provider
   def prepare_request(:object, model_input, input, opts) do
-    # Mark operation type so formatter can handle appropriately
     opts_with_operation = Keyword.put(opts, :operation, :object)
     do_prepare_request(model_input, input, opts_with_operation)
+  end
+
+  @impl ReqLLM.Provider
+  def prepare_request(:embedding, model_input, text, opts) do
+    with {:ok, model} <- ReqLLM.model(model_input) do
+      {gcp_creds, other_opts} = extract_gcp_credentials(opts)
+      validate_gcp_credentials!(gcp_creds)
+
+      region = gcp_creds[:region] || @default_region
+      project_id = gcp_creds[:project_id]
+      model_id = model.provider_model_id || model.id
+
+      body = build_embedding_body(text, other_opts)
+
+      base_url = build_base_url(region)
+      path = build_embedding_path(model_id, project_id, region)
+      url = "#{base_url}#{path}"
+
+      http_opts = Keyword.get(other_opts, :req_http_options, [])
+
+      request =
+        Req.new(
+          [
+            url: url,
+            method: :post,
+            json: body,
+            receive_timeout: 60_000,
+            headers: [{"content-type", "application/json"}]
+          ] ++ http_opts
+        )
+        |> Req.Request.register_options([:operation, :text])
+        |> Req.Request.merge_options(operation: :embedding, text: text)
+        |> Req.Request.put_private(:gcp_credentials, gcp_creds)
+        |> Req.Request.put_private(:model, model)
+        |> attach_embedding(gcp_creds)
+
+      {:ok, request}
+    end
   end
 
   defp do_prepare_request(model_input, input, opts) do
@@ -264,6 +310,82 @@ defmodule ReqLLM.Providers.GoogleVertex do
       end
     )
   end
+
+  defp attach_embedding(request, gcp_creds) do
+    request
+    |> ReqLLM.Step.Error.attach()
+    |> ReqLLM.Step.Retry.attach()
+    |> Req.Request.append_response_steps(llm_decode_response: &decode_embedding_response/1)
+    |> put_gcp_auth(gcp_creds)
+  end
+
+  defp build_embedding_body(text, opts) when is_binary(text) do
+    instance = %{"content" => text}
+
+    instance =
+      case Keyword.get(opts, :task_type) || get_in(opts, [:provider_options, :task_type]) do
+        nil -> instance
+        task -> Map.put(instance, "task_type", task)
+      end
+
+    body = %{"instances" => [instance]}
+
+    case Keyword.get(opts, :dimensions) || get_in(opts, [:provider_options, :dimensions]) do
+      nil -> body
+      dims -> Map.put(body, "parameters", %{"outputDimensionality" => dims})
+    end
+  end
+
+  defp build_embedding_body(texts, opts) when is_list(texts) do
+    task_type = Keyword.get(opts, :task_type) || get_in(opts, [:provider_options, :task_type])
+
+    instances =
+      Enum.map(texts, fn t ->
+        instance = %{"content" => t}
+        if task_type, do: Map.put(instance, "task_type", task_type), else: instance
+      end)
+
+    body = %{"instances" => instances}
+
+    case Keyword.get(opts, :dimensions) || get_in(opts, [:provider_options, :dimensions]) do
+      nil -> body
+      dims -> Map.put(body, "parameters", %{"outputDimensionality" => dims})
+    end
+  end
+
+  defp build_embedding_path(model_id, project_id, region) do
+    "/v1/projects/#{project_id}/locations/#{region}/publishers/google/models/#{model_id}:predict"
+  end
+
+  @doc false
+  def decode_embedding_response({request, %Req.Response{status: status} = response})
+      when status in 200..299 do
+    body =
+      case response.body do
+        b when is_binary(b) -> Jason.decode!(b)
+        b when is_map(b) -> b
+      end
+
+    normalized = normalize_vertex_embedding_response(body)
+    {request, %{response | body: normalized}}
+  end
+
+  def decode_embedding_response({request, response}), do: {request, response}
+
+  defp normalize_vertex_embedding_response(%{"predictions" => predictions})
+       when is_list(predictions) do
+    data =
+      predictions
+      |> Enum.with_index()
+      |> Enum.map(fn {prediction, idx} ->
+        values = get_in(prediction, ["embeddings", "values"]) || []
+        %{"index" => idx, "embedding" => values}
+      end)
+
+    %{"data" => data}
+  end
+
+  defp normalize_vertex_embedding_response(other), do: other
 
   defp fetch_access_token(%{access_token: token})
        when is_binary(token) and byte_size(token) > 0 do
