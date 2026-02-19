@@ -9,6 +9,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- changelog -->
 
+## [v1.6.0](https://github.com/agentjido/req_llm/compare/v1.5.1...v1.6.0) (2026-02-19)
+
+
+
+
+### Features:
+
+* implement #431 response classify, usage API, and tool key safety (#432) by mikehostetler
+
+* add response classify API and harden usage/tool normalization by mikehostetler
+
+* add igniter installer (#410) by AdwayKasture
+
+* add embedding support to google_vertex provider (#423) by paulorumor
+
+* enable reasoning support for DeepSeek models on Azure (#412) by shelvick
+
+* enable reasoning support for DeepSeek models on Azure by shelvick
+
+* Add on_tool_call callback to StreamResponse (#413) by Arjan Scherpenisse
+
+* add OpenAI-compatible model family support for Vertex AI MaaS models (#422) by shelvick
+
+* jido: enhance agent functionality with usage tracking and multi-turn support by mikehostetler
+
+### Bug Fixes:
+
+* Updating model data (#435) by Pedro Assunção
+
+* resolve dialyzer warnings in response classify normalization by mikehostetler
+
+* handle string finish reasons in response classify by mikehostetler
+
+* add Gemini 3 thought_signature support for function calls (#427) by Brandon L'Europa
+
+* Do not force strict tools for responses api (#399) by ycastorium
+
+* use proportional estimate for inferred reasoning tokens by shelvick
+
+* route Vertex AI MaaS models to endpoints/openapi/chat/completions (#424) by shelvick
+
+* increase default timeout for DeepSeek and MAI-DS models on Azure (#425) by shelvick
+
+* Azure AI Foundry auth header and API version defaults (#411) by shelvick
+
+* remove invalid `id` field from Google functionCall serialization (#414) by paulorumor
+
+* remove invalid `id` field from Google functionCall serialization by paulorumor
+
+* pass strict flag through to Anthropic tool format (#415) by Edgar Gomes
+
+* pass strict flag through to Anthropic tool format by Edgar Gomes
+
+* pass strict flag through to Bedrock Converse tool format by Edgar Gomes
+
+* harden ZAI thinking re-encoding and req_llm.gen model errors (#420) by mikehostetler
+
+* harden zai thinking re-encoding and gen model validation by mikehostetler
+
+* zai: remove unreachable encode_zai_content clauses by mikehostetler
+
+* streaming decode for inference profile models using InvokeModel API (#406) by neilberkman
+
+* req_llm: improve streaming stability with finch client fixes by mikehostetler
+
 ## [v1.5.1](https://github.com/agentjido/req_llm/compare/v1.5.0...v1.5.1) (2026-02-04)
 
 
