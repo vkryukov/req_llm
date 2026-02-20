@@ -94,21 +94,9 @@ defmodule ReqLLM.Embedding do
       embedding_models = get_embedding_models()
 
       if model_string in embedding_models do
-        # Also verify the provider supports embedding operations
         case ReqLLM.provider(model.provider) do
-          {:ok, provider_module} ->
-            # Test if provider can prepare embedding request
-            case provider_module.prepare_request(:embedding, model, "test", []) do
-              {:ok, _} ->
-                {:ok, model}
-
-              {:error, _} ->
-                {:error,
-                 ReqLLM.Error.Invalid.Parameter.exception(
-                   parameter:
-                     "model: #{model_string} provider does not support embedding operations"
-                 )}
-            end
+          {:ok, _provider_module} ->
+            {:ok, model}
 
           {:error, _} ->
             {:error,
