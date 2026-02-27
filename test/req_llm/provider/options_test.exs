@@ -632,6 +632,46 @@ defmodule ReqLLM.Provider.OptionsTest do
     end
   end
 
+  describe "Options.process/4 - embedding operation schema" do
+    test "uses embedding schema for :embedding operations" do
+      model = %LLMDB.Model{provider: :simple, id: "embedding-model"}
+      opts = [dimensions: 512, encoding_format: "float"]
+
+      assert {:ok, processed} = Options.process(SimpleProvider, :embedding, model, opts)
+      assert processed[:dimensions] == 512
+      assert processed[:encoding_format] == "float"
+    end
+
+    test "rejects generation-specific options for :embedding operations" do
+      model = %LLMDB.Model{provider: :simple, id: "embedding-model"}
+      opts = [temperature: 0.7]
+
+      assert {:error, _} = Options.process(SimpleProvider, :embedding, model, opts)
+    end
+
+    test "accepts embedding options with provider_options" do
+      model = %LLMDB.Model{provider: :mock, id: "embedding-model"}
+
+      opts = [
+        dimensions: 256,
+        provider_options: [custom_option: "test"]
+      ]
+
+      assert {:ok, processed} = Options.process(MockProvider, :embedding, model, opts)
+      assert processed[:dimensions] == 256
+      assert processed[:provider_options][:custom_option] == "test"
+    end
+
+    test "uses generation schema for non-embedding operations" do
+      model = %LLMDB.Model{provider: :simple, id: "test-model"}
+      opts = [temperature: 0.7, max_tokens: 100]
+
+      assert {:ok, processed} = Options.process(SimpleProvider, :chat, model, opts)
+      assert processed[:temperature] == 0.7
+      assert processed[:max_tokens] == 100
+    end
+  end
+
   describe "Options.process/4 - edge cases" do
     test "handles stream/stream? alias conversion" do
       model = %LLMDB.Model{provider: :mock, id: "test-model"}

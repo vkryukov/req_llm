@@ -553,7 +553,9 @@ defmodule ReqLLM.Providers.Google do
         :reasoning_effort,
         :reasoning_token_budget,
         :stream,
-        :provider_options
+        :provider_options,
+        :dimensions,
+        :encoding_format
       ] ++
         __MODULE__.supported_provider_options()
 

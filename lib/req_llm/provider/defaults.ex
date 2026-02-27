@@ -433,7 +433,9 @@ defmodule ReqLLM.Provider.Defaults do
         :stop,
         :user,
         :reasoning_effort,
-        :reasoning_token_budget
+        :reasoning_token_budget,
+        :dimensions,
+        :encoding_format
       ] ++ provider_mod.supported_provider_options()
 
     {api_key, extra_option_keys}
