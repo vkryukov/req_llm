@@ -7,12 +7,19 @@ defmodule ReqLLM.Embedding do
   - Batch text embedding generation
   - Model validation for embedding support
 
-  Currently only OpenAI models are supported for embeddings.
+  ## Usage Tracking
+
+  By default, `embed/3` returns only the embedding vectors. To also retrieve
+  token usage data, pass `return_usage: true`:
+
+      {:ok, %{embedding: vectors, usage: usage}} =
+        ReqLLM.embed("openai:text-embedding-3-small", "Hello", return_usage: true)
+
+  Usage availability depends on provider support.
   """
 
   alias LLMDB.Model
 
-  # Get embedding models dynamically from LLMDB
   defp get_embedding_models do
     ReqLLM.Providers.list()
     |> Enum.flat_map(fn provider ->
@@ -53,6 +60,12 @@ defmodule ReqLLM.Embedding do
                  fixture: [
                    type: {:or, [:string, {:tuple, [:atom, :string]}]},
                    doc: "HTTP fixture for testing (provider inferred from model if string)"
+                 ],
+                 return_usage: [
+                   type: :boolean,
+                   default: false,
+                   doc:
+                     "When true, returns %{embedding: vectors, usage: usage_map} instead of just vectors"
                  ]
                )
 
@@ -90,7 +103,6 @@ defmodule ReqLLM.Embedding do
     with {:ok, model} <- ReqLLM.model(model_spec) do
       model_string = LLMDB.Model.spec(model)
 
-      # Check if model is in the embedding models list
       embedding_models = get_embedding_models()
 
       if model_string in embedding_models do
@@ -139,6 +151,7 @@ defmodule ReqLLM.Embedding do
     * `:encoding_format` - Format for encoding ("float" or "base64")
     * `:user` - User identifier for tracking
     * `:provider_options` - Provider-specific options
+    * `:return_usage` - When `true`, returns `%{embedding: vectors, usage: map}` (default: `false`)
 
   ## Examples
 
@@ -153,22 +166,37 @@ defmodule ReqLLM.Embedding do
       )
       #=> {:ok, [[0.1, -0.2, ...], [0.3, 0.4, ...]]}
 
+      # With usage data
+      {:ok, %{embedding: vectors, usage: usage}} = ReqLLM.Embedding.embed(
+        "openai:text-embedding-3-small",
+        "Hello world",
+        return_usage: true
+      )
+      #=> {:ok, %{embedding: [0.1, ...], usage: %{input_tokens: 2, total_tokens: 2}}}
+
   """
   @spec embed(
           String.t() | {atom(), keyword()} | struct(),
           String.t() | [String.t()],
           keyword()
-        ) :: {:ok, [float()] | [[float()]]} | {:error, term()}
+        ) :: {:ok, [float()] | [[float()]] | map()} | {:error, term()}
   def embed(model_spec, input, opts \\ [])
 
   def embed(model_spec, text, opts) when is_binary(text) do
+    {return_usage, provider_opts} = Keyword.pop(opts, :return_usage, false)
+
     with {:ok, model} <- validate_model(model_spec),
          :ok <- validate_input(text),
          {:ok, provider_module} <- ReqLLM.provider(model.provider),
-         {:ok, request} <- provider_module.prepare_request(:embedding, model, text, opts),
-         {:ok, %Req.Response{status: status, body: decoded_response}} when status in 200..299 <-
-           Req.request(request) do
-      extract_single_embedding(decoded_response)
+         {:ok, request} <- provider_module.prepare_request(:embedding, model, text, provider_opts),
+         {:ok, %Req.Response{status: status} = response} when status in 200..299 <-
+           Req.request(request),
+         {:ok, embedding} <- extract_single_embedding(response.body) do
+      if return_usage do
+        {:ok, %{embedding: embedding, usage: extract_usage(response)}}
+      else
+        {:ok, embedding}
+      end
     else
       {:ok, %Req.Response{status: status, body: body}} ->
         {:error,
@@ -184,13 +212,21 @@ defmodule ReqLLM.Embedding do
   end
 
   def embed(model_spec, texts, opts) when is_list(texts) do
+    {return_usage, provider_opts} = Keyword.pop(opts, :return_usage, false)
+
     with {:ok, model} <- validate_model(model_spec),
          :ok <- validate_input(texts),
          {:ok, provider_module} <- ReqLLM.provider(model.provider),
-         {:ok, request} <- provider_module.prepare_request(:embedding, model, texts, opts),
-         {:ok, %Req.Response{status: status, body: decoded_response}} when status in 200..299 <-
-           Req.request(request) do
-      extract_multiple_embeddings(decoded_response)
+         {:ok, request} <-
+           provider_module.prepare_request(:embedding, model, texts, provider_opts),
+         {:ok, %Req.Response{status: status} = response} when status in 200..299 <-
+           Req.request(request),
+         {:ok, embeddings} <- extract_multiple_embeddings(response.body) do
+      if return_usage do
+        {:ok, %{embedding: embeddings, usage: extract_usage(response)}}
+      else
+        {:ok, embeddings}
+      end
     else
       {:ok, %Req.Response{status: status, body: body}} ->
         {:error,
@@ -248,5 +284,12 @@ defmodule ReqLLM.Embedding do
        reason: "Invalid embedding response format",
        response_body: response
      )}
+  end
+
+  defp extract_usage(%Req.Response{private: private}) do
+    case get_in(private, [:req_llm, :usage]) do
+      %{tokens: tokens} -> tokens
+      _ -> nil
+    end
   end
 end

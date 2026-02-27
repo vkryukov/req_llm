@@ -597,6 +597,14 @@ defmodule ReqLLM.Providers.AmazonBedrockTest do
 
       assert attached.response_steps[:llm_decode_embedding] != nil
     end
+
+    test "attaches usage step", %{model: model, opts: opts} do
+      request = Req.new(url: "/model/cohere.embed-english-v3/invoke", method: :post)
+
+      attached = AmazonBedrock.attach_embedding(request, model, opts)
+
+      assert attached.response_steps[:llm_usage] != nil
+    end
   end
 
   describe "Cohere embedding formatter" do

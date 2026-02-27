@@ -497,6 +497,7 @@ defmodule ReqLLM.Providers.AmazonBedrock do
         |> ReqLLM.Step.Retry.attach()
         |> put_aws_sigv4(aws_creds)
         |> Req.Request.append_response_steps(llm_decode_embedding: &decode_embedding_response/1)
+        |> Step.Usage.attach(model)
         |> ReqLLM.Step.Fixture.maybe_attach(model, user_opts)
 
       {:error, error} ->
@@ -1097,7 +1098,7 @@ defmodule ReqLLM.Providers.AmazonBedrock do
 
   defp decode_embedding_response({req, %{status: 200} = resp}) do
     if req.private[:llm_fixture_replay] do
-      {req, resp}
+      {req, inject_usage_from_headers(resp)}
     else
       parsed_body = ensure_parsed_body(resp.body)
       model_family = req.options[:model_family]
@@ -1105,7 +1106,7 @@ defmodule ReqLLM.Providers.AmazonBedrock do
 
       case formatter.parse_embedding_response(parsed_body) do
         {:ok, normalized_response} ->
-          {req, %{resp | body: normalized_response}}
+          {req, inject_usage_from_headers(%{resp | body: normalized_response})}
 
         {:error, error} ->
           {req, error}
@@ -1123,6 +1124,43 @@ defmodule ReqLLM.Providers.AmazonBedrock do
 
     {req, err}
   end
+
+  defp inject_usage_from_headers(%{body: body, headers: headers} = resp)
+       when is_map(body) do
+    case get_header_value(headers, "x-amzn-bedrock-input-token-count") do
+      nil ->
+        resp
+
+      count_str ->
+        case Integer.parse(count_str) do
+          {count, _} ->
+            usage = %{"prompt_tokens" => count, "total_tokens" => count}
+            %{resp | body: Map.put(body, "usage", usage)}
+
+          :error ->
+            resp
+        end
+    end
+  end
+
+  defp inject_usage_from_headers(resp), do: resp
+
+  defp get_header_value(headers, key) when is_map(headers) do
+    case Map.get(headers, key) do
+      [value | _] -> value
+      _ -> nil
+    end
+  end
+
+  defp get_header_value(headers, key) when is_list(headers) do
+    case List.keyfind(headers, key, 0) do
+      {_, [value | _]} -> value
+      {_, value} when is_binary(value) -> value
+      _ -> nil
+    end
+  end
+
+  defp get_header_value(_, _), do: nil
 
   @impl ReqLLM.Provider
   def thinking_constraints do
