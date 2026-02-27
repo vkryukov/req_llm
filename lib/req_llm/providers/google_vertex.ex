@@ -292,6 +292,7 @@ defmodule ReqLLM.Providers.GoogleVertex do
     gcp_creds = Req.Request.get_private(request, :gcp_credentials)
 
     request
+    |> Req.Request.merge_options(finch: ReqLLM.Application.finch_name())
     |> ReqLLM.Step.Error.attach()
     |> ReqLLM.Step.Retry.attach()
     |> Req.Request.append_response_steps(llm_decode_response: &decode_response/1)
@@ -322,6 +323,7 @@ defmodule ReqLLM.Providers.GoogleVertex do
 
   defp attach_embedding(request, gcp_creds) do
     request
+    |> Req.Request.merge_options(finch: ReqLLM.Application.finch_name())
     |> ReqLLM.Step.Error.attach()
     |> ReqLLM.Step.Retry.attach()
     |> Req.Request.append_response_steps(llm_decode_response: &decode_embedding_response/1)

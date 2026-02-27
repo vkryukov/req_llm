@@ -2,9 +2,10 @@ defmodule ReqLLM.Application do
   @moduledoc """
   Application supervisor for ReqLLM.
 
-  Starts and supervises the Finch instance used for streaming LLM APIs.
-  Provides optimized connection pools per provider with sensible defaults
-  that can be overridden via application configuration.
+  Starts and supervises the Finch instance used for all HTTP operations,
+  both streaming (via `Finch.stream/5`) and non-streaming (via Req).
+  Provides optimized connection pools with sensible defaults that can be
+  overridden via application configuration.
 
   ## Configuration
 
@@ -68,7 +69,7 @@ defmodule ReqLLM.Application do
   end
 
   @doc """
-  Gets the default Finch name used by ReqLLM for streaming operations.
+  Gets the default Finch name used by ReqLLM for all HTTP operations.
   """
   @spec finch_name() :: atom()
   def finch_name do

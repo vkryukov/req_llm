@@ -270,8 +270,7 @@ defmodule ReqLLM.Providers.OpenAI do
             url: path,
             method: :post,
             receive_timeout: timeout,
-            pool_timeout: timeout,
-            connect_options: [timeout: timeout]
+            pool_timeout: timeout
           ] ++ http_opts
         )
         |> Req.Request.register_options(req_keys)
@@ -326,8 +325,7 @@ defmodule ReqLLM.Providers.OpenAI do
             url: path,
             method: :post,
             receive_timeout: timeout,
-            pool_timeout: timeout,
-            connect_options: [timeout: timeout]
+            pool_timeout: timeout
           ] ++ http_opts
         )
         |> Req.Request.register_options(req_keys)

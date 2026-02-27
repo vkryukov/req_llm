@@ -157,8 +157,7 @@ defmodule ReqLLM.Providers.Anthropic do
             url: "/v1/messages",
             method: :post,
             receive_timeout: timeout,
-            pool_timeout: timeout,
-            connect_options: [timeout: timeout]
+            pool_timeout: timeout
           ] ++ http_opts
         )
         |> Req.Request.register_options(req_keys)
@@ -282,7 +281,9 @@ defmodule ReqLLM.Providers.Anthropic do
     |> Req.Request.put_header("anthropic-version", get_anthropic_version(user_opts))
     |> Req.Request.put_private(:req_llm_model, model)
     |> maybe_add_beta_header(user_opts)
-    |> Req.Request.merge_options([model: get_api_model_id(model)] ++ user_opts)
+    |> Req.Request.merge_options(
+      [finch: ReqLLM.Application.finch_name(), model: get_api_model_id(model)] ++ user_opts
+    )
     |> ReqLLM.Step.Error.attach()
     |> ReqLLM.Step.Retry.attach(user_opts)
     |> Req.Request.append_request_steps(llm_encode_body: &encode_body/1)

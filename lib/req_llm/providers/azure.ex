@@ -525,7 +525,7 @@ defmodule ReqLLM.Providers.Azure do
       end)
     end)
     |> Req.Request.register_options(extra_option_keys ++ [:deployment])
-    |> Req.Request.merge_options(user_opts)
+    |> Req.Request.merge_options([finch: ReqLLM.Application.finch_name()] ++ user_opts)
     |> ReqLLM.Step.Retry.attach()
     |> ReqLLM.Step.Error.attach()
     |> Req.Request.append_response_steps(llm_decode_response: &decode_response/1)
